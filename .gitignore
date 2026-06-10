@@ -1,0 +1,8 @@
+.env
+.env.*
+*.db
+*.sqlite
+*.exe
+
+# Go build artifacts
+vendor/
