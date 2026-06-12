@@ -109,4 +109,4 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             docker pull ${{ env.IMAGE_NAME }}:latest
-            docker service update --image ${{ env.IMAGE_NAME }}:latest --force cloud-dashboard_core_api
+            docker service update --image ${{ env.IMAGE_NAME }}:latest --force cloud-core_api
