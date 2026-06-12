@@ -25,6 +25,7 @@ func RegisterRoutes(app *fiber.App, authCtrl *controllers.AuthController, proxmo
 	proxmox.Get("/nodes", proxmoxCtrl.GetNodes)
 	proxmox.Get("/nodes/:node/status", proxmoxCtrl.GetNodeStatus)
 	proxmox.Get("/nodes/:node/instances", proxmoxCtrl.GetInstances)
+	proxmox.Get("/nodes/:node/:type/:vmid/ip", proxmoxCtrl.GetInstanceIP)
 
 	// Proxmox VM Actions
 	proxmox.Post("/nodes/:node/qemu/:vmid/power", proxmoxCtrl.VMPowerAction)

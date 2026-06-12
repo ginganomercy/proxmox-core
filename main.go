@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"os"
 
 	"cbt-core-api/config"
 	"cbt-core-api/controllers"
@@ -35,8 +36,13 @@ func main() {
 	app.Use(logger.New(logger.Config{
 		Format: "[${time}] ${status} - ${method} ${path}\n",
 	}))
+	allowedOrigins := os.Getenv("CORS_ALLOWED_ORIGINS")
+	if allowedOrigins == "" {
+		allowedOrigins = "https://cloud-dashboard.pbjt.web.id, http://localhost:5173"
+	}
+
 	app.Use(cors.New(cors.Config{
-		AllowOrigins: "*", // Adjust for production
+		AllowOrigins: allowedOrigins,
 		AllowHeaders: "Origin, Content-Type, Accept, Authorization",
 	}))
 

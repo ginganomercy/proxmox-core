@@ -74,3 +74,16 @@ func (ctrl *ProxmoxController) UpdateVMConfig(c *fiber.Ctx) error {
 
 	return c.JSON(fiber.Map{"status": "success"})
 }
+
+func (ctrl *ProxmoxController) GetInstanceIP(c *fiber.Ctx) error {
+	node := c.Params("node")
+	type_ := c.Params("type")
+	vmid := c.Params("vmid")
+
+	ip, err := ctrl.proxmoxService.GetInstanceIP(node, type_, vmid)
+	if err != nil {
+		return c.Status(404).JSON(fiber.Map{"error": "IP not found or agent not running"})
+	}
+
+	return c.JSON(fiber.Map{"ip": ip})
+}
