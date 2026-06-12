@@ -154,7 +154,7 @@ func (s *proxmoxServiceImpl) GetNodeRrdData(node, timeframe string) ([]interface
 
 func (s *proxmoxServiceImpl) GetVncProxy(node, vmType, vmid string) (map[string]interface{}, error) {
 	endpoint := fmt.Sprintf("/nodes/%s/%s/%s/vncproxy", node, vmType, vmid)
-	
+
 	// Create x509 parameter for proxy
 	payload := map[string]interface{}{
 		"websocket": 1,

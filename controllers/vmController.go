@@ -1,17 +1,23 @@
 package controllers
 
 import (
+	"cbt-core-api/utils"
+
 	"github.com/gofiber/fiber/v2"
 )
 
 func (ctrl *ProxmoxController) VMPowerAction(c *fiber.Ctx) error {
 	node := c.Params("node")
 	vmid := c.Params("vmid")
-	
+
+	if !utils.IsValidNode(node) || !utils.IsValidVMID(vmid) {
+		return c.Status(400).JSON(fiber.Map{"error": "invalid parameter format (potential path traversal detected)"})
+	}
+
 	var req struct {
 		Action string `json:"action"` // start, stop, shutdown, reboot
 	}
-	
+
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "invalid body"})
 	}
@@ -33,6 +39,10 @@ func (ctrl *ProxmoxController) GetVncProxy(c *fiber.Ctx) error {
 	vmid := c.Params("vmid")
 	type_ := c.Params("type") // qemu or lxc
 
+	if !utils.IsValidNode(node) || !utils.IsValidVMID(vmid) || !utils.IsValidVMType(type_) {
+		return c.Status(400).JSON(fiber.Map{"error": "invalid parameter format (potential path traversal detected)"})
+	}
+
 	data, err := ctrl.proxmoxService.GetVncProxy(node, type_, vmid)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
@@ -53,6 +63,10 @@ type VMConfigRequest struct {
 func (ctrl *ProxmoxController) UpdateVMConfig(c *fiber.Ctx) error {
 	node := c.Params("node")
 	vmid := c.Params("vmid")
+
+	if !utils.IsValidNode(node) || !utils.IsValidVMID(vmid) {
+		return c.Status(400).JSON(fiber.Map{"error": "invalid parameter format (potential path traversal detected)"})
+	}
 
 	var req VMConfigRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -79,6 +93,10 @@ func (ctrl *ProxmoxController) GetInstanceIP(c *fiber.Ctx) error {
 	node := c.Params("node")
 	type_ := c.Params("type")
 	vmid := c.Params("vmid")
+
+	if !utils.IsValidNode(node) || !utils.IsValidVMID(vmid) || !utils.IsValidVMType(type_) {
+		return c.Status(400).JSON(fiber.Map{"error": "invalid parameter format (potential path traversal detected)"})
+	}
 
 	ip, err := ctrl.proxmoxService.GetInstanceIP(node, type_, vmid)
 	if err != nil {

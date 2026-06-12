@@ -42,7 +42,7 @@ func (ctrl *AuthController) Login(c *fiber.Ctx) error {
 
 func (ctrl *AuthController) Me(c *fiber.Ctx) error {
 	userID := c.Locals("userId").(string)
-	
+
 	user, err := ctrl.authService.GetMe(userID)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": err.Error()})

@@ -16,7 +16,7 @@ func RegisterRoutes(app *fiber.App, authCtrl *controllers.AuthController, proxmo
 
 	// Protected Routes
 	protected := api.Group("/", middleware.Protected())
-	
+
 	// Auth verification
 	protected.Get("/auth/me", authCtrl.Me)
 

@@ -1,6 +1,8 @@
 package controllers
 
 import (
+	"cbt-core-api/utils"
+
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -10,6 +12,10 @@ func (ctrl *ProxmoxController) GetSnapshots(c *fiber.Ctx) error {
 	node := c.Params("node")
 	vmid := c.Params("vmid")
 	type_ := c.Params("type")
+
+	if !utils.IsValidNode(node) || !utils.IsValidVMID(vmid) || !utils.IsValidVMType(type_) {
+		return c.Status(400).JSON(fiber.Map{"error": "invalid parameter format (potential path traversal detected)"})
+	}
 
 	data, err := ctrl.proxmoxService.GetSnapshots(node, type_, vmid)
 	if err != nil {
@@ -23,6 +29,10 @@ func (ctrl *ProxmoxController) CreateSnapshot(c *fiber.Ctx) error {
 	node := c.Params("node")
 	vmid := c.Params("vmid")
 	type_ := c.Params("type")
+
+	if !utils.IsValidNode(node) || !utils.IsValidVMID(vmid) || !utils.IsValidVMType(type_) {
+		return c.Status(400).JSON(fiber.Map{"error": "invalid parameter format (potential path traversal detected)"})
+	}
 
 	var req struct {
 		Snapname    string `json:"snapname"`
@@ -47,6 +57,10 @@ func (ctrl *ProxmoxController) RollbackSnapshot(c *fiber.Ctx) error {
 	type_ := c.Params("type")
 	snapname := c.Params("snapname")
 
+	if !utils.IsValidNode(node) || !utils.IsValidVMID(vmid) || !utils.IsValidVMType(type_) {
+		return c.Status(400).JSON(fiber.Map{"error": "invalid parameter format (potential path traversal detected)"})
+	}
+
 	err := ctrl.proxmoxService.RollbackSnapshot(node, type_, vmid, snapname)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
@@ -60,6 +74,10 @@ func (ctrl *ProxmoxController) DeleteSnapshot(c *fiber.Ctx) error {
 	vmid := c.Params("vmid")
 	type_ := c.Params("type")
 	snapname := c.Params("snapname")
+
+	if !utils.IsValidNode(node) || !utils.IsValidVMID(vmid) || !utils.IsValidVMType(type_) {
+		return c.Status(400).JSON(fiber.Map{"error": "invalid parameter format (potential path traversal detected)"})
+	}
 
 	err := ctrl.proxmoxService.DeleteSnapshot(node, type_, vmid, snapname)
 	if err != nil {
@@ -75,6 +93,10 @@ func (ctrl *ProxmoxController) RebuildInstance(c *fiber.Ctx) error {
 	node := c.Params("node")
 	vmid := c.Params("vmid")
 	type_ := c.Params("type")
+
+	if !utils.IsValidNode(node) || !utils.IsValidVMID(vmid) || !utils.IsValidVMType(type_) {
+		return c.Status(400).JSON(fiber.Map{"error": "invalid parameter format (potential path traversal detected)"})
+	}
 
 	// This is a complex operation requiring clone and replace logic.
 	// For now, we will proxy it or return a mock success to simulate the architecture.
