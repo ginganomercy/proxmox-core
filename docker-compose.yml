@@ -1,0 +1,30 @@
+version: '3.8'
+services:
+  api:
+    image: ghcr.io/ginganomercy/proxmox-core:latest
+    env_file:
+      - .env
+    volumes:
+      - sqlite_data:/app/data
+    networks:
+      - front-tier
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      update_config:
+        parallelism: 1
+        delay: 10s
+
+volumes:
+  sqlite_data:
+    driver: local
+    driver_opts:
+      type: nfs4
+      o: addr=172.17.2.50,rw
+      device: ":/mnt/pve/nfs-swarm/sqlite_data/proxmox_dashboard"
+
+networks:
+  front-tier:
+    external: true
