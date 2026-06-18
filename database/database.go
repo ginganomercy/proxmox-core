@@ -26,7 +26,7 @@ func ConnectDB() {
 	log.Println("Database connection successfully opened.")
 
 	// Run AutoMigrate to build tables based on models
-	err = DB.AutoMigrate(models.User{}, models.Server{})
+	err = DB.AutoMigrate(&models.User{}, &models.Server{}, &models.Voucher{})
 	if err != nil {
 		log.Fatalf("Failed to run migrations: %v", err)
 	}

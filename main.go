@@ -50,6 +50,7 @@ func main() {
 	userRepo := repositories.NewUserRepository(database.DB)
 	authService := services.NewAuthService(userRepo)
 	authCtrl := controllers.NewAuthController(authService)
+	voucherCtrl := controllers.NewVoucherController(userRepo)
 
 	proxmoxClient, err := proxmox.NewClient()
 	if err != nil {
@@ -59,7 +60,7 @@ func main() {
 	proxmoxCtrl := controllers.NewProxmoxController(proxmoxService)
 
 	// Register Routes
-	routes.RegisterRoutes(app, authCtrl, proxmoxCtrl)
+	routes.RegisterRoutes(app, authCtrl, proxmoxCtrl, voucherCtrl)
 
 	// Start server
 	port := config.Env.Port

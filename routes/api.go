@@ -7,7 +7,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-func RegisterRoutes(app *fiber.App, authCtrl *controllers.AuthController, proxmoxCtrl *controllers.ProxmoxController) {
+func RegisterRoutes(app *fiber.App, authCtrl *controllers.AuthController, proxmoxCtrl *controllers.ProxmoxController, voucherCtrl *controllers.VoucherController) {
 	api := app.Group("/api")
 
 	// Public Routes
@@ -20,6 +20,12 @@ func RegisterRoutes(app *fiber.App, authCtrl *controllers.AuthController, proxmo
 	// Auth verification
 	protected.Get("/auth/me", authCtrl.Me)
 
+	// Voucher Routes
+	vouchers := protected.Group("/vouchers")
+	vouchers.Post("/", middleware.AdminOnly(), voucherCtrl.GenerateVoucher)
+	vouchers.Get("/", middleware.AdminOnly(), voucherCtrl.GetVouchers)
+	vouchers.Post("/redeem", voucherCtrl.RedeemVoucher)
+
 	// Proxmox Nodes & Instances
 	proxmox := protected.Group("/proxmox")
 	proxmox.Get("/nodes", proxmoxCtrl.GetNodes)
@@ -28,6 +34,7 @@ func RegisterRoutes(app *fiber.App, authCtrl *controllers.AuthController, proxmo
 	proxmox.Get("/nodes/:node/:type/:vmid/ip", proxmoxCtrl.GetInstanceIP)
 
 	// Proxmox VM Actions
+	proxmox.Post("/vms", proxmoxCtrl.CreateVM)
 	proxmox.Post("/nodes/:node/qemu/:vmid/power", proxmoxCtrl.VMPowerAction)
 	proxmox.Post("/nodes/:node/qemu/:vmid/config", proxmoxCtrl.UpdateVMConfig)
 	proxmox.Post("/nodes/:node/:type/:vmid/vncproxy", proxmoxCtrl.GetVncProxy)

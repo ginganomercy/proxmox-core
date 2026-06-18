@@ -23,6 +23,8 @@ type ProxmoxService interface {
 	RollbackSnapshot(node, vmType, vmid, snapname string) error
 	DeleteSnapshot(node, vmType, vmid, snapname string) error
 	RebuildInstance(node, vmType, vmid string) error
+	CloneVM(node, baseVmid, newVmid string, name string) error
+	ResizeDisk(node, vmType, vmid, disk, size string) error
 }
 
 type proxmoxServiceImpl struct {
@@ -224,8 +226,57 @@ func (s *proxmoxServiceImpl) DeleteSnapshot(node, vmType, vmid, snapname string)
 	return err
 }
 
+func (s *proxmoxServiceImpl) CloneVM(node, baseVmid, newVmid string, name string) error {
+	endpoint := fmt.Sprintf("/nodes/%s/qemu/%s/clone", node, baseVmid)
+	payload := map[string]interface{}{
+		"newid": newVmid,
+		"name":  name,
+		"full":  1, // 1 for full clone, 0 for linked clone
+	}
+	_, err := s.client.Post(endpoint, payload)
+	if err == nil {
+		proxmox.Cache.Delete(fmt.Sprintf("instances_%s", node))
+	}
+	return err
+}
+
+func (s *proxmoxServiceImpl) ResizeDisk(node, vmType, vmid, disk, size string) error {
+	endpoint := fmt.Sprintf("/nodes/%s/%s/%s/resize", node, vmType, vmid)
+	payload := map[string]interface{}{
+		"disk": disk,
+		"size": size,
+	}
+	_, err := s.client.Post(endpoint, payload)
+	return err
+}
+
 func (s *proxmoxServiceImpl) RebuildInstance(node, vmType, vmid string) error {
-	return nil // Mocked for now
+	if vmType != "qemu" {
+		return fmt.Errorf("rebuild only supported for qemu")
+	}
+
+	// 1. Force Stop VM
+	s.VMPowerAction(node, vmType, vmid, "stop")
+	time.Sleep(3 * time.Second)
+
+	// 2. Delete VM
+	endpointDel := fmt.Sprintf("/nodes/%s/%s/%s", node, vmType, vmid)
+	_, err := s.client.Delete(endpointDel)
+	if err != nil {
+		return fmt.Errorf("failed to delete existing VM: %v", err)
+	}
+
+	// Wait for deletion
+	time.Sleep(5 * time.Second)
+
+	// 3. Clone from Golden Image
+	err = s.CloneVM(node, "100", vmid, "Rebuilt-VM-"+vmid)
+	if err != nil {
+		return fmt.Errorf("failed to clone from golden image: %v", err)
+	}
+
+	proxmox.Cache.Delete(fmt.Sprintf("instances_%s", node))
+	return nil
 }
 
 func (s *proxmoxServiceImpl) GetInstanceIP(node, vmType, vmid string) (string, error) {

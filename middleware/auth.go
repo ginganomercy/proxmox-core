@@ -38,7 +38,19 @@ func Protected() fiber.Handler {
 		// Set user data in locals
 		c.Locals("userId", claims["id"])
 		c.Locals("username", claims["username"])
+		c.Locals("role", claims["role"])
 
+		return c.Next()
+	}
+}
+
+// AdminOnly protects routes that require ADMIN role
+func AdminOnly() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		role, ok := c.Locals("role").(string)
+		if !ok || role != "ADMIN" {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Forbidden: Admins only"})
+		}
 		return c.Next()
 	}
 }
