@@ -9,6 +9,7 @@ import (
 	"cbt-core-api/repositories"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -17,14 +18,17 @@ type AuthService interface {
 	Login(username, password string) (string, error)
 	GetMe(id string) (*models.User, error)
 	EnsureAdminExists() error
+	RequestPasswordReset(username string) error
+	ResetPassword(token, newPassword string) error
 }
 
 type authServiceImpl struct {
-	userRepo repositories.UserRepository
+	userRepo     repositories.UserRepository
+	emailService EmailService
 }
 
-func NewAuthService(userRepo repositories.UserRepository) AuthService {
-	return &authServiceImpl{userRepo: userRepo}
+func NewAuthService(userRepo repositories.UserRepository, emailService EmailService) AuthService {
+	return &authServiceImpl{userRepo: userRepo, emailService: emailService}
 }
 
 func (s *authServiceImpl) EnsureAdminExists() error {
@@ -101,4 +105,50 @@ func (s *authServiceImpl) GetMe(id string) (*models.User, error) {
 		return nil, errors.New("user not found")
 	}
 	return user, nil
+}
+
+func (s *authServiceImpl) RequestPasswordReset(username string) error {
+	user, err := s.userRepo.FindByUsername(username)
+	if err != nil {
+		// Don't leak whether the user exists or not
+		return nil
+	}
+
+	token := uuid.NewString()
+	expiry := time.Now().Add(1 * time.Hour)
+	
+	user.ResetToken = &token
+	user.ResetTokenExpiry = &expiry
+
+	if err := s.userRepo.Update(user); err != nil {
+		return errors.New("failed to generate reset token")
+	}
+
+	return s.emailService.SendPasswordReset(user.Username, user.Username, token)
+}
+
+func (s *authServiceImpl) ResetPassword(token, newPassword string) error {
+	user, err := s.userRepo.FindByResetToken(token)
+	if err != nil {
+		return errors.New("invalid or expired token")
+	}
+
+	if user.ResetTokenExpiry == nil || time.Now().After(*user.ResetTokenExpiry) {
+		return errors.New("token has expired")
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return errors.New("failed to hash password")
+	}
+
+	user.PasswordHash = string(hash)
+	user.ResetToken = nil
+	user.ResetTokenExpiry = nil
+
+	if err := s.userRepo.Update(user); err != nil {
+		return errors.New("failed to reset password")
+	}
+
+	return nil
 }

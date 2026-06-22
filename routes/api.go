@@ -20,6 +20,8 @@ func RegisterRoutes(
 	auth := api.Group("/auth")
 	auth.Post("/register", authCtrl.Register)
 	auth.Post("/login", authCtrl.Login)
+	auth.Post("/forgot-password", authCtrl.ForgotPassword)
+	auth.Post("/reset-password", authCtrl.ResetPassword)
 
 	// Protected Routes
 	protected := api.Group("/", middleware.Protected())

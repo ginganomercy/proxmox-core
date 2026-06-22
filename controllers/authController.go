@@ -76,3 +76,42 @@ func (ctrl *AuthController) Me(c *fiber.Ctx) error {
 
 	return c.JSON(user)
 }
+
+func (ctrl *AuthController) ForgotPassword(c *fiber.Ctx) error {
+	var req struct {
+		Username string `json:"username"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
+	}
+
+	if req.Username == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Username is required"})
+	}
+
+	// Always return success to prevent username enumeration
+	_ = ctrl.authService.RequestPasswordReset(req.Username)
+
+	return c.JSON(fiber.Map{"message": "If that username exists, a password reset link has been sent."})
+}
+
+func (ctrl *AuthController) ResetPassword(c *fiber.Ctx) error {
+	var req struct {
+		Token       string `json:"token"`
+		NewPassword string `json:"newPassword"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
+	}
+
+	if req.Token == "" || req.NewPassword == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Token and newPassword are required"})
+	}
+
+	err := ctrl.authService.ResetPassword(req.Token, req.NewPassword)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	return c.JSON(fiber.Map{"message": "Password successfully reset"})
+}

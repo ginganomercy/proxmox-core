@@ -13,6 +13,8 @@ type UserRepository interface {
 	UpdateBalance(id string, addAmount float64) error
 	GetVoucherByCode(code string) (*models.Voucher, error)
 	RedeemVoucher(code string, userId string) (*models.Voucher, error)
+	FindByResetToken(token string) (*models.User, error)
+	Update(user *models.User) error
 }
 
 type userRepositoryImpl struct {
@@ -86,4 +88,16 @@ func (r *userRepositoryImpl) RedeemVoucher(code string, userId string) (*models.
 		return nil, err
 	}
 	return &voucher, nil
+}
+
+func (r *userRepositoryImpl) FindByResetToken(token string) (*models.User, error) {
+	var user models.User
+	if err := r.db.Where("reset_token = ?", token).First(&user).Error; err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+func (r *userRepositoryImpl) Update(user *models.User) error {
+	return r.db.Save(user).Error
 }

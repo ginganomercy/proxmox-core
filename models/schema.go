@@ -11,11 +11,13 @@ type User struct {
 	ID           string    `gorm:"primaryKey;type:varchar(36)" json:"id"`
 	Username     string    `gorm:"uniqueIndex;not null" json:"username"`
 	PasswordHash string    `gorm:"not null" json:"-"`
-	Role         string    `gorm:"default:'CLIENT'" json:"role"`
-	Balance      float64   `gorm:"default:0.0" json:"balance"`
-	Servers      []Server  `gorm:"foreignKey:UserID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"servers"`
-	CreatedAt    time.Time `json:"createdAt"`
-	UpdatedAt    time.Time `json:"updatedAt"`
+	Role             string     `gorm:"default:'CLIENT'" json:"role"`
+	Balance          float64    `gorm:"default:0.0" json:"balance"`
+	ResetToken       *string    `gorm:"type:varchar(255);index" json:"-"`
+	ResetTokenExpiry *time.Time `json:"-"`
+	Servers          []Server   `gorm:"foreignKey:UserID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"servers"`
+	CreatedAt        time.Time  `json:"createdAt"`
+	UpdatedAt        time.Time  `json:"updatedAt"`
 }
 
 type Server struct {

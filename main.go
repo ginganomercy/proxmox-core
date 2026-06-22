@@ -48,7 +48,8 @@ func main() {
 
 	// Initialize Dependencies (Clean Architecture)
 	userRepo := repositories.NewUserRepository(database.DB)
-	authService := services.NewAuthService(userRepo)
+	emailService := services.NewEmailService()
+	authService := services.NewAuthService(userRepo, emailService)
 	authCtrl := controllers.NewAuthController(authService)
 	voucherCtrl := controllers.NewVoucherController(userRepo)
 
@@ -60,7 +61,6 @@ func main() {
 	proxmoxCtrl := controllers.NewProxmoxController(proxmoxService)
 
 	orderRepo := repositories.NewOrderRepository(database.DB)
-	emailService := services.NewEmailService()
 	orderCtrl := controllers.NewOrderController(orderRepo, userRepo, emailService, proxmoxService)
 
 	// Register Routes
