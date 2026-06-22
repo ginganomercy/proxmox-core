@@ -58,6 +58,12 @@ func (ctrl *OrderController) CreateOrder(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Missing required fields"})
 	}
 
+	// Cek apakah pengguna sudah memiliki pesanan / VM sebelumnya
+	existingOrders, err := ctrl.orderRepo.FindByUserID(userID)
+	if err == nil && len(existingOrders) > 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Anda telah mencapai batas maksimal 1 Server Virtual per akun."})
+	}
+
 	// Calculate cost
 	totalCost := float64(req.Cores*10000 + req.Memory*10 + req.Storage*5000)
 
