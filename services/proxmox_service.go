@@ -245,12 +245,18 @@ func (s *proxmoxServiceImpl) GetNextVMID() (string, error) {
 		return "", fmt.Errorf("failed to parse next VMID response: %w", err)
 	}
 
-	data, ok := resp["data"].(string)
-	if !ok || data == "" {
-		return "", fmt.Errorf("invalid VMID returned from cluster")
+	// Proxmox usually returns the VMID as an integer/float64, not a string
+	switch v := resp["data"].(type) {
+	case string:
+		if v == "" {
+			return "", fmt.Errorf("invalid VMID returned from cluster")
+		}
+		return v, nil
+	case float64:
+		return fmt.Sprintf("%.0f", v), nil
+	default:
+		return "", fmt.Errorf("invalid VMID format returned from cluster")
 	}
-
-	return data, nil
 }
 
 // WaitForTask polls a Proxmox UPID task until it completes (OK), fails, or times out.
