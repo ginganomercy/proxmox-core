@@ -95,6 +95,16 @@ func (ctrl *ProxmoxController) CheckOwnership(userId, role, vmid string) bool {
 	if err != nil {
 		return false
 	}
-	database.DB.Model(&models.Server{}).Where("user_id = ? AND vmid = ?", userId, vmidInt).Count(&count)
+	
+	// Use struct for Where to automatically resolve GORM column names (like vm_id)
+	res := database.DB.Model(&models.Server{}).Where(&models.Server{
+		UserID: userId,
+		VMID:   vmidInt,
+	}).Count(&count)
+	
+	if res.Error != nil {
+		return false
+	}
+	
 	return count > 0
 }
