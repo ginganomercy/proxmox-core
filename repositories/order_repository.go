@@ -12,6 +12,7 @@ type OrderRepository interface {
 	FindByUserID(userID string) ([]models.Order, error)
 	FindAll() ([]models.Order, error)
 	Update(order *models.Order) error
+	Delete(id string) error
 }
 
 type orderRepositoryImpl struct {
@@ -46,4 +47,8 @@ func (r *orderRepositoryImpl) FindAll() ([]models.Order, error) {
 
 func (r *orderRepositoryImpl) Update(order *models.Order) error {
 	return r.db.Save(order).Error
+}
+
+func (r *orderRepositoryImpl) Delete(id string) error {
+	return r.db.Where("id = ?", id).Delete(&models.Order{}).Error
 }

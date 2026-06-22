@@ -71,7 +71,7 @@ func (ctrl *ProxmoxController) GetInstances(c *fiber.Ctx) error {
 	}
 
 	// Filter Proxmox API data
-	var filtered []interface{}
+	filtered := make([]interface{}, 0)
 	for _, v := range data {
 		if m, ok := v.(map[string]interface{}); ok {
 			vmidFloat, ok := m["vmid"].(float64)

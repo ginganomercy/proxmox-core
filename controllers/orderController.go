@@ -117,6 +117,32 @@ func (ctrl *OrderController) GetAllOrders(c *fiber.Ctx) error {
 	return c.JSON(orders)
 }
 
+func (ctrl *OrderController) DeleteOrder(c *fiber.Ctx) error {
+	orderID := c.Params("id")
+	userId := c.Locals("userId").(string)
+	role, _ := c.Locals("role").(string)
+
+	order, err := ctrl.orderRepo.FindByID(orderID)
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Order not found"})
+	}
+
+	// Only admin or owner can delete, and only if it's FAILED (to prevent accidental deletion of provisioning/active orders)
+	if role != "ADMIN" && order.UserID != userId {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Forbidden"})
+	}
+
+	if order.Status != "FAILED" && role != "ADMIN" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Only FAILED orders can be deleted by user"})
+	}
+
+	if err := ctrl.orderRepo.Delete(orderID); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to delete order"})
+	}
+
+	return c.JSON(fiber.Map{"message": "Order deleted successfully"})
+}
+
 func (ctrl *OrderController) GenerateCode(c *fiber.Ctx) error {
 	orderID := c.Params("id")
 	order, err := ctrl.orderRepo.FindByID(orderID)

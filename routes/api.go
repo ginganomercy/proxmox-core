@@ -37,6 +37,7 @@ func RegisterRoutes(
 	orders.Post("/", orderCtrl.CreateOrder)
 	orders.Get("/me", orderCtrl.GetMyOrders)
 	orders.Post("/:id/activate", orderCtrl.ActivateOrder)
+	orders.Delete("/:id", orderCtrl.DeleteOrder)
 	
 	// Admin Order Routes
 	adminOrders := protected.Group("/admin/orders", middleware.AdminOnly())
