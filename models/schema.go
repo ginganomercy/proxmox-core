@@ -31,16 +31,6 @@ type Server struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
-type Voucher struct {
-	ID        string    `gorm:"primaryKey;type:varchar(36)" json:"id"`
-	Code      string    `gorm:"uniqueIndex;not null" json:"code"`
-	Amount    float64   `gorm:"not null" json:"amount"`
-	IsUsed    bool      `gorm:"default:false" json:"isUsed"`
-	UsedBy    *string   `gorm:"type:varchar(36)" json:"usedBy,omitempty"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
-}
-
 type Order struct {
 	ID             string    `gorm:"primaryKey;type:varchar(36)" json:"id"`
 	UserID         string    `gorm:"type:varchar(36);not null" json:"userId"`
@@ -71,13 +61,6 @@ func (u *User) BeforeCreate(tx *gorm.DB) (err error) {
 func (s *Server) BeforeCreate(tx *gorm.DB) (err error) {
 	if s.ID == "" {
 		s.ID = uuid.NewString()
-	}
-	return
-}
-
-func (v *Voucher) BeforeCreate(tx *gorm.DB) (err error) {
-	if v.ID == "" {
-		v.ID = uuid.NewString()
 	}
 	return
 }

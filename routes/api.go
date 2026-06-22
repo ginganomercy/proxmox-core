@@ -12,7 +12,6 @@ func RegisterRoutes(
 	authCtrl *controllers.AuthController,
 	ssoCtrl *controllers.SSOController,
 	proxmoxCtrl *controllers.ProxmoxController,
-	voucherCtrl *controllers.VoucherController,
 	orderCtrl *controllers.OrderController,
 	adminCtrl *controllers.AdminController,
 ) {
@@ -32,12 +31,6 @@ func RegisterRoutes(
 
 	// Auth verification
 	protected.Get("/auth/me", authCtrl.Me)
-
-	// Voucher Routes
-	vouchers := protected.Group("/vouchers")
-	vouchers.Post("/", middleware.AdminOnly(), voucherCtrl.GenerateVoucher)
-	vouchers.Get("/", middleware.AdminOnly(), voucherCtrl.GetVouchers)
-	vouchers.Post("/redeem", voucherCtrl.RedeemVoucher)
 
 	// Order Routes
 	orders := protected.Group("/orders")
