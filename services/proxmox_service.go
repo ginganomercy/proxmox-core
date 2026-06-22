@@ -23,8 +23,14 @@ type ProxmoxService interface {
 	RollbackSnapshot(node, vmType, vmid, snapname string) error
 	DeleteSnapshot(node, vmType, vmid, snapname string) error
 	RebuildInstance(node, vmType, vmid string) error
-	CloneVM(node, baseVmid, newVmid string, name string) error
+	CloneVM(node, baseVmid, newVmid string, name string) (string, error)
 	ResizeDisk(node, vmType, vmid, disk, size string) error
+	// Production-grade: Get next available VMID from cluster
+	GetNextVMID() (string, error)
+	// Production-grade: Poll a Proxmox task until completion or timeout
+	WaitForTask(node, upid string) error
+	// Production-grade: Delete a VM for rollback purposes
+	DeleteVM(node, vmid string) error
 }
 
 type proxmoxServiceImpl struct {
@@ -226,18 +232,117 @@ func (s *proxmoxServiceImpl) DeleteSnapshot(node, vmType, vmid, snapname string)
 	return err
 }
 
-func (s *proxmoxServiceImpl) CloneVM(node, baseVmid, newVmid string, name string) error {
-	endpoint := fmt.Sprintf("/nodes/%s/qemu/%s/clone", node, baseVmid)
-	payload := map[string]interface{}{
-		"newid": newVmid,
-		"name":  name,
-		"full":  1, // 1 for full clone, 0 for linked clone
+// GetNextVMID calls the Proxmox cluster API to get the next available unique VMID.
+// This guarantees no collision between concurrent VM provisioning requests.
+func (s *proxmoxServiceImpl) GetNextVMID() (string, error) {
+	body, err := s.client.Get("/cluster/nextid")
+	if err != nil {
+		return "", fmt.Errorf("failed to get next VMID from cluster: %w", err)
 	}
-	_, err := s.client.Post(endpoint, payload)
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return "", fmt.Errorf("failed to parse next VMID response: %w", err)
+	}
+
+	data, ok := resp["data"].(string)
+	if !ok || data == "" {
+		return "", fmt.Errorf("invalid VMID returned from cluster")
+	}
+
+	return data, nil
+}
+
+// WaitForTask polls a Proxmox UPID task until it completes (OK), fails, or times out.
+// This is the production-grade alternative to time.Sleep, ensuring VM is fully
+// unlocked before issuing follow-up configuration commands.
+func (s *proxmoxServiceImpl) WaitForTask(node, upid string) error {
+	// Proxmox task logs endpoint
+	endpoint := fmt.Sprintf("/nodes/%s/tasks/%s/status", node, upid)
+
+	// Poll every 3 seconds, timeout after 10 minutes (large clone on slow storage)
+	const POLL_INTERVAL = 3 * time.Second
+	const TIMEOUT = 10 * time.Minute
+
+	deadline := time.Now().Add(TIMEOUT)
+
+	for time.Now().Before(deadline) {
+		body, err := s.client.Get(endpoint)
+		if err != nil {
+			// Transient error, retry on next poll
+			time.Sleep(POLL_INTERVAL)
+			continue
+		}
+
+		var resp map[string]interface{}
+		if err := json.Unmarshal(body, &resp); err != nil {
+			return fmt.Errorf("failed to parse task status: %w", err)
+		}
+
+		data, ok := resp["data"].(map[string]interface{})
+		if !ok {
+			time.Sleep(POLL_INTERVAL)
+			continue
+		}
+
+		status, _ := data["status"].(string)
+
+		switch status {
+		case "OK":
+			return nil
+		case "error":
+			exitStatus, _ := data["exitstatus"].(string)
+			return fmt.Errorf("proxmox task failed with status: %s", exitStatus)
+		}
+
+		// status is still "running", keep polling
+		time.Sleep(POLL_INTERVAL)
+	}
+
+	return fmt.Errorf("task %s timed out after %v", upid, TIMEOUT)
+}
+
+// DeleteVM deletes a QEMU VM from a Proxmox node. Used for rollback on provisioning failure.
+func (s *proxmoxServiceImpl) DeleteVM(node, vmid string) error {
+	// Force stop first, ignore error if already stopped
+	_ = s.VMPowerAction(node, "qemu", vmid, "stop")
+	time.Sleep(2 * time.Second)
+
+	endpoint := fmt.Sprintf("/nodes/%s/qemu/%s", node, vmid)
+	_, err := s.client.Delete(endpoint)
 	if err == nil {
 		proxmox.Cache.Delete(fmt.Sprintf("instances_%s", node))
 	}
 	return err
+}
+
+// CloneVM clones a VM template and returns the Proxmox UPID task ID.
+// The caller MUST call WaitForTask with the returned UPID before modifying the new VM.
+func (s *proxmoxServiceImpl) CloneVM(node, baseVmid, newVmid string, name string) (string, error) {
+	endpoint := fmt.Sprintf("/nodes/%s/qemu/%s/clone", node, baseVmid)
+	payload := map[string]interface{}{
+		"newid": newVmid,
+		"name":  name,
+		"full":  1, // Full clone — independent of template storage
+	}
+	body, err := s.client.Post(endpoint, payload)
+	if err != nil {
+		return "", err
+	}
+
+	// Proxmox returns the UPID task ID in the 'data' field
+	var resp map[string]interface{}
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return "", fmt.Errorf("failed to parse clone response: %w", err)
+	}
+
+	upid, ok := resp["data"].(string)
+	if !ok || upid == "" {
+		return "", fmt.Errorf("no UPID returned from clone operation")
+	}
+
+	proxmox.Cache.Delete(fmt.Sprintf("instances_%s", node))
+	return upid, nil
 }
 
 func (s *proxmoxServiceImpl) ResizeDisk(node, vmType, vmid, disk, size string) error {
@@ -269,10 +374,15 @@ func (s *proxmoxServiceImpl) RebuildInstance(node, vmType, vmid string) error {
 	// Wait for deletion
 	time.Sleep(5 * time.Second)
 
-	// 3. Clone from Golden Image
-	err = s.CloneVM(node, "100", vmid, "Rebuilt-VM-"+vmid)
+	// 3. Clone from Golden Image and wait for task to complete
+	upid, err := s.CloneVM(node, "100", vmid, "Rebuilt-VM-"+vmid)
 	if err != nil {
 		return fmt.Errorf("failed to clone from golden image: %v", err)
+	}
+
+	// Wait for clone task to fully complete before proceeding
+	if err := s.WaitForTask(node, upid); err != nil {
+		return fmt.Errorf("clone task failed during rebuild: %v", err)
 	}
 
 	proxmox.Cache.Delete(fmt.Sprintf("instances_%s", node))

@@ -4,9 +4,8 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	mathrand "math/rand"
+	"log"
 	"strconv"
-	"time"
 
 	"cbt-core-api/database"
 	"cbt-core-api/models"
@@ -68,18 +67,18 @@ func (ctrl *OrderController) CreateOrder(c *fiber.Ctx) error {
 	totalCost := float64(req.Cores*10000 + req.Memory*10 + req.Storage*5000)
 
 	order := models.Order{
-		UserID:    userID,
-		UserEmail: req.UserEmail,
-		Node:      req.Node,
-		Name:      req.Name,
-		Cores:     req.Cores,
-		Memory:    req.Memory,
-		Storage:   req.Storage,
-		Ciuser:    req.Ciuser,
+		UserID:     userID,
+		UserEmail:  req.UserEmail,
+		Node:       req.Node,
+		Name:       req.Name,
+		Cores:      req.Cores,
+		Memory:     req.Memory,
+		Storage:    req.Storage,
+		Ciuser:     req.Ciuser,
 		Cipassword: req.Cipassword,
-		Ipconfig0: req.Ipconfig0,
-		TotalCost: totalCost,
-		Status:    "PENDING",
+		Ipconfig0:  req.Ipconfig0,
+		TotalCost:  totalCost,
+		Status:     "PENDING",
 	}
 
 	if err := ctrl.orderRepo.Create(&order); err != nil {
@@ -123,7 +122,7 @@ func (ctrl *OrderController) GenerateCode(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch user data"})
 	}
 
-	// Generate 6-char random code
+	// Generate 6-char random code using cryptographically secure source
 	code := generateRandomCode(6)
 	order.ActivationCode = code
 	order.Status = "READY_TO_ACTIVATE"
@@ -132,11 +131,10 @@ func (ctrl *OrderController) GenerateCode(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update order"})
 	}
 
-	// Send Email
+	// Send Email asynchronously — fire-and-forget with structured error log
 	go func() {
-		err := ctrl.emailService.SendActivationCode(order.UserEmail, user.Username, order.Name, code)
-		if err != nil {
-			fmt.Println("Failed to send email to", order.UserEmail, err)
+		if err := ctrl.emailService.SendActivationCode(order.UserEmail, user.Username, order.Name, code); err != nil {
+			log.Printf("[ERROR] Failed to send activation email to %s: %v", order.UserEmail, err)
 		}
 	}()
 
@@ -147,6 +145,14 @@ type ActivateRequest struct {
 	Code string `json:"code"`
 }
 
+// ActivateOrder is the core VM provisioning pipeline.
+// It follows a strict sequential flow with UPID polling at each async step:
+// 1. Get safe unique VMID from cluster (anti-collision)
+// 2. Clone VM from template → wait for task completion (WaitForTask)
+// 3. Resize disk to ordered size
+// 4. Apply cloud-init config (CPU, RAM, user, password, IP)
+// 5. Power on the VM
+// 6. On any failure after clone: auto-rollback by deleting the cloned VM
 func (ctrl *OrderController) ActivateOrder(c *fiber.Ctx) error {
 	orderID := c.Params("id")
 	userID := c.Locals("userId").(string)
@@ -161,6 +167,7 @@ func (ctrl *OrderController) ActivateOrder(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Order not found"})
 	}
 
+	// Authorization: ensure the requesting user owns this order
 	if order.UserID != userID {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "You do not own this order"})
 	}
@@ -173,27 +180,68 @@ func (ctrl *OrderController) ActivateOrder(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid activation code"})
 	}
 
-	// Generate a new unique VMID (e.g. 500-900)
-	seededRand := mathrand.New(mathrand.NewSource(time.Now().UnixNano()))
-	newVmidInt := 500 + seededRand.Intn(400)
-	newVmid := strconv.Itoa(newVmidInt)
-	baseVmid := "100"
-
-	// 1. Clone VM
-	err = ctrl.proxmoxService.CloneVM(order.Node, baseVmid, newVmid, order.Name)
+	// ── Step 1: Get a guaranteed-unique VMID from the Proxmox cluster ──────────
+	// Replaces unsafe math/rand approach that could collide with existing VMs.
+	newVmid, err := ctrl.proxmoxService.GetNextVMID()
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to clone VM", "details": err.Error()})
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error":   "Failed to allocate a new VMID from cluster",
+			"details": err.Error(),
+		})
 	}
 
-	time.Sleep(3 * time.Second)
+	// The golden image (base template) must exist at VMID 100 in Proxmox with Cloud-Init configured.
+	const BASE_TEMPLATE_VMID = "100"
+	log.Printf("[INFO] Provisioning VM for order %s: NewVMID=%s from template %s on node %s",
+		orderID, newVmid, BASE_TEMPLATE_VMID, order.Node)
 
-	// 2. Resize Disk
-	if order.Storage > 3 {
-		addSize := order.Storage - 3
-		_ = ctrl.proxmoxService.ResizeDisk(order.Node, "qemu", newVmid, "scsi0", fmt.Sprintf("+%dG", addSize))
+	// ── Step 2: Clone the template and obtain Proxmox UPID task token ──────────
+	cloneUpid, err := ctrl.proxmoxService.CloneVM(order.Node, BASE_TEMPLATE_VMID, newVmid, order.Name)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error":   "Failed to clone VM template",
+			"details": err.Error(),
+		})
+	}
+	log.Printf("[INFO] Clone task started. Waiting for UPID: %s", cloneUpid)
+
+	// ── Step 3: WAIT for clone task to fully complete ───────────────────────────
+	// Polls Proxmox every 3s until task is "OK". Replaces unreliable time.Sleep(3s).
+	if err := ctrl.proxmoxService.WaitForTask(order.Node, cloneUpid); err != nil {
+		log.Printf("[ERROR] Clone task %s failed: %v", cloneUpid, err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error":   "VM clone task failed",
+			"details": err.Error(),
+		})
+	}
+	log.Printf("[INFO] Clone task %s completed. VM %s is fully unlocked and ready.", cloneUpid, newVmid)
+
+	// From here, any failure must trigger a rollback to avoid orphaned VMs.
+	rollback := func(reason string) {
+		log.Printf("[WARN] Rollback triggered for VMID %s. Reason: %s", newVmid, reason)
+		if rbErr := ctrl.proxmoxService.DeleteVM(order.Node, newVmid); rbErr != nil {
+			log.Printf("[ERROR] Rollback failed for VMID %s: %v — manual cleanup required.", newVmid, rbErr)
+		}
 	}
 
-	// 3. Update Config
+	// ── Step 4: Resize disk if ordered storage exceeds base template size ───────
+	const BASE_DISK_SIZE_GB = 3
+	if order.Storage > BASE_DISK_SIZE_GB {
+		addSize := order.Storage - BASE_DISK_SIZE_GB
+		sizeStr := fmt.Sprintf("+%dG", addSize)
+		log.Printf("[INFO] Resizing disk for VMID %s by %s", newVmid, sizeStr)
+
+		if err := ctrl.proxmoxService.ResizeDisk(order.Node, "qemu", newVmid, "scsi0", sizeStr); err != nil {
+			rollback(fmt.Sprintf("ResizeDisk failed: %v", err))
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error":   "Failed to resize VM disk",
+				"details": err.Error(),
+			})
+		}
+	}
+
+	// ── Step 5: Apply Cloud-Init configuration ──────────────────────────────────
+	// VM is now fully unlocked post-WaitForTask, so config will be applied correctly.
 	ciConfig := VMConfigRequest{
 		Cores:      &order.Cores,
 		Memory:     &order.Memory,
@@ -201,9 +249,23 @@ func (ctrl *OrderController) ActivateOrder(c *fiber.Ctx) error {
 		CIPassword: &order.Cipassword,
 		IPConfig0:  &order.Ipconfig0,
 	}
-	_ = ctrl.proxmoxService.UpdateVMConfig(order.Node, "qemu", newVmid, ciConfig)
+	if err := ctrl.proxmoxService.UpdateVMConfig(order.Node, "qemu", newVmid, ciConfig); err != nil {
+		rollback(fmt.Sprintf("UpdateVMConfig failed: %v", err))
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error":   "Failed to apply VM configuration",
+			"details": err.Error(),
+		})
+	}
+	log.Printf("[INFO] Config applied to VMID %s. Powering on...", newVmid)
 
-	// 4. Register server to DB
+	// ── Step 6: Power on the VM ─────────────────────────────────────────────────
+	if err := ctrl.proxmoxService.VMPowerAction(order.Node, "qemu", newVmid, "start"); err != nil {
+		// VM is configured but failed to start — recoverable state, admin can start manually.
+		log.Printf("[WARN] VM %s configured but failed to power on: %v", newVmid, err)
+	}
+
+	// ── Step 7: Persist VM ownership record to database ─────────────────────────
+	newVmidInt, _ := strconv.Atoi(newVmid)
 	server := models.Server{
 		VMID:   newVmidInt,
 		Node:   order.Node,
@@ -211,13 +273,26 @@ func (ctrl *OrderController) ActivateOrder(c *fiber.Ctx) error {
 		Name:   order.Name,
 		UserID: userID,
 	}
-	
+
 	if err := database.DB.Create(&server).Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to save server to database"})
+		// VM is running. Do NOT rollback — log for manual reconciliation instead.
+		log.Printf("[CRITICAL] VMID %s provisioned but failed to save to DB: %v. Manual reconciliation required.", newVmid, err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "VM provisioned but failed to register in database. Please contact support.",
+		})
 	}
 
+	// ── Step 8: Mark order as completed ─────────────────────────────────────────
 	order.Status = "COMPLETED"
-	ctrl.orderRepo.Update(order)
+	if err := ctrl.orderRepo.Update(order); err != nil {
+		log.Printf("[ERROR] Failed to update order %s status to COMPLETED: %v", orderID, err)
+	}
 
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "VM provisioned successfully", "vmid": newVmidInt})
+	log.Printf("[INFO] VM provisioning successful. OrderID=%s, VMID=%s, Node=%s", orderID, newVmid, order.Node)
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"message": "VM provisioned successfully",
+		"vmid":    newVmidInt,
+		"node":    order.Node,
+	})
 }

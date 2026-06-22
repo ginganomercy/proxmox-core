@@ -5,9 +5,7 @@ import (
 	"cbt-core-api/models"
 	"cbt-core-api/utils"
 	"fmt"
-	"math/rand"
 	"strconv"
-	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"gorm.io/gorm"
@@ -174,30 +172,35 @@ func (ctrl *ProxmoxController) CreateVM(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "insufficient balance. Please redeem a voucher."})
 	}
 
-	// Generate a new unique VMID (e.g. 500-900)
-	seededRand := rand.New(rand.NewSource(time.Now().UnixNano()))
-	newVmidInt := 500 + seededRand.Intn(400)
-	newVmid := strconv.Itoa(newVmidInt)
+	// ── Step 1: Get guaranteed-unique VMID from Proxmox cluster ──────────────
+	// Replaces unsafe math/rand that could collide with existing VMs.
+	newVmid, err := ctrl.proxmoxService.GetNextVMID()
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to allocate VMID from cluster", "details": err.Error()})
+	}
+	newVmidInt, _ := strconv.Atoi(newVmid)
 
-	// Base Image is debian-golden-image (VMID: 100)
-	baseVmid := "100"
+	// Base Image (Golden Image) must be VMID 100 with Cloud-Init configured in Proxmox.
+	const BASE_TEMPLATE_VMID = "100"
 
-	// 1. Clone VM
-	err := ctrl.proxmoxService.CloneVM(req.Node, baseVmid, newVmid, req.Name)
+	// ── Step 2: Clone and obtain the Proxmox UPID task token ─────────────────
+	cloneUpid, err := ctrl.proxmoxService.CloneVM(req.Node, BASE_TEMPLATE_VMID, newVmid, req.Name)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to clone VM from Golden Image", "details": err.Error()})
 	}
 
-	// Wait a bit for clone to register
-	time.Sleep(3 * time.Second)
+	// ── Step 3: Wait for clone task to fully complete before modifying VM ─────
+	if err := ctrl.proxmoxService.WaitForTask(req.Node, cloneUpid); err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Clone task failed", "details": err.Error()})
+	}
 
-	// 2. Resize Disk if needed (Golden image base is 3GB)
+	// ── Step 4: Resize disk if needed (Golden image base is 3GB) ─────────────
 	if req.Storage > 3 {
 		addSize := req.Storage - 3
 		_ = ctrl.proxmoxService.ResizeDisk(req.Node, "qemu", newVmid, "scsi0", fmt.Sprintf("+%dG", addSize))
 	}
 
-	// 3. Update Hardware & Cloud-Init Specs
+	// ── Step 5: Apply Cloud-Init config — VM is now fully unlocked ────────────
 	ciConfig := VMConfigRequest{
 		Cores:      &req.Cores,
 		Memory:     &req.Memory,
@@ -207,10 +210,10 @@ func (ctrl *ProxmoxController) CreateVM(c *fiber.Ctx) error {
 	}
 	_ = ctrl.proxmoxService.UpdateVMConfig(req.Node, "qemu", newVmid, ciConfig)
 
-	// 4. Deduct Balance and Create Ownership Record
+	// ── Step 6: Deduct Balance and Create Ownership Record in a transaction ───
 	database.DB.Transaction(func(tx *gorm.DB) error {
 		tx.Model(&user).Update("balance", gorm.Expr("balance - ?", cost))
-		
+
 		server := models.Server{
 			VMID:   newVmidInt,
 			Node:   req.Node,
@@ -223,9 +226,9 @@ func (ctrl *ProxmoxController) CreateVM(c *fiber.Ctx) error {
 	})
 
 	return c.JSON(fiber.Map{
-		"status": "success",
+		"status":  "success",
 		"message": "VM Provisioning started successfully",
-		"vmid": newVmidInt,
-		"cost": cost,
+		"vmid":    newVmidInt,
+		"cost":    cost,
 	})
 }
