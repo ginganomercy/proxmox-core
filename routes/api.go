@@ -10,6 +10,7 @@ import (
 func RegisterRoutes(
 	app *fiber.App,
 	authCtrl *controllers.AuthController,
+	ssoCtrl *controllers.SSOController,
 	proxmoxCtrl *controllers.ProxmoxController,
 	voucherCtrl *controllers.VoucherController,
 	orderCtrl *controllers.OrderController,
@@ -22,6 +23,8 @@ func RegisterRoutes(
 	auth.Post("/login", authCtrl.Login)
 	auth.Post("/forgot-password", authCtrl.ForgotPassword)
 	auth.Post("/reset-password", authCtrl.ResetPassword)
+	auth.Get("/google", ssoCtrl.GoogleLogin)
+	auth.Get("/google/callback", ssoCtrl.GoogleCallback)
 
 	// Protected Routes
 	protected := api.Group("/", middleware.Protected())

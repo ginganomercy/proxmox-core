@@ -20,6 +20,7 @@ type AuthService interface {
 	EnsureAdminExists() error
 	RequestPasswordReset(username string) error
 	ResetPassword(token, newPassword string) error
+	LoginWithGoogle(email string) (string, error)
 }
 
 type authServiceImpl struct {
@@ -152,3 +153,40 @@ func (s *authServiceImpl) ResetPassword(token, newPassword string) error {
 
 	return nil
 }
+
+func (s *authServiceImpl) LoginWithGoogle(email string) (string, error) {
+	s.EnsureAdminExists()
+
+	user, err := s.userRepo.FindByUsername(email)
+	if err != nil {
+		// User doesn't exist, create it with a random password
+		randomPassword := uuid.NewString()
+		hash, _ := bcrypt.GenerateFromPassword([]byte(randomPassword), bcrypt.DefaultCost)
+		
+		user = &models.User{
+			Username:     email,
+			PasswordHash: string(hash),
+			Role:         "USER",
+			Balance:      0.0,
+		}
+		
+		if err := s.userRepo.Create(user); err != nil {
+			return "", errors.New("failed to create user during sso")
+		}
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"id":       user.ID,
+		"username": user.Username,
+		"role":     user.Role,
+		"exp":      time.Now().Add(24 * time.Hour).Unix(),
+	})
+
+	tokenString, err := token.SignedString([]byte(config.Env.JWTSecret))
+	if err != nil {
+		return "", errors.New("could not generate token")
+	}
+
+	return tokenString, nil
+}
+

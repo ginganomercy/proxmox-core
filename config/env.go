@@ -24,6 +24,9 @@ type Config struct {
 	SMTPPort           string
 	SMTPUser           string
 	SMTPPass           string
+	GoogleClientID     string
+	GoogleClientSecret string
+	GoogleRedirectURL  string
 }
 
 // Env global variable holding config
@@ -51,6 +54,9 @@ func LoadConfig() {
 		SMTPPort:           getEnv("SMTP_PORT", "587"),
 		SMTPUser:           getEnv("SMTP_USER", ""),
 		SMTPPass:           getEnv("SMTP_PASS", ""),
+		GoogleClientID:     getEnv("GOOGLE_CLIENT_ID", ""),
+		GoogleClientSecret: getEnv("GOOGLE_CLIENT_SECRET", ""),
+		GoogleRedirectURL:  getEnv("GOOGLE_REDIRECT_URL", "http://localhost:3001/api/auth/google/callback"),
 	}
 }
 
