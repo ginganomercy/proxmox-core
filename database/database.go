@@ -2,6 +2,7 @@ package database
 
 import (
 	"log"
+	"os"
 
 	"cbt-core-api/models"
 
@@ -15,8 +16,13 @@ var DB *gorm.DB
 func ConnectDB() {
 	var err error
 
-	// Open SQLite database file (it will create proxmox.db if it doesn't exist)
-	DB, err = gorm.Open(sqlite.Open("proxmox.db"), &gorm.Config{
+	dbPath := os.Getenv("DB_PATH")
+	if dbPath == "" {
+		dbPath = "proxmox.db"
+	}
+
+	// Open SQLite database file
+	DB, err = gorm.Open(sqlite.Open(dbPath), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Info),
 	})
 	if err != nil {
