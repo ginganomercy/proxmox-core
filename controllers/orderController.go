@@ -85,6 +85,18 @@ func (ctrl *OrderController) CreateOrder(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create order"})
 	}
 
+	user, _ := ctrl.userRepo.FindByID(userID)
+	username := "Customer"
+	if user != nil {
+		username = user.Username
+	}
+
+	go func() {
+		if err := ctrl.emailService.SendOrderInvoice(order.UserEmail, username, order.Name, order.Cores, order.Memory, order.Storage, order.TotalCost); err != nil {
+			log.Printf("[ERROR] Failed to send order invoice email to %s: %v", order.UserEmail, err)
+		}
+	}()
+
 	return c.Status(fiber.StatusCreated).JSON(order)
 }
 
