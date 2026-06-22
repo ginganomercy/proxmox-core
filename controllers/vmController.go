@@ -232,3 +232,38 @@ func (ctrl *ProxmoxController) CreateVM(c *fiber.Ctx) error {
 		"cost":    cost,
 	})
 }
+
+// DeleteInstance destroys the VM and deletes the database record. No refunds.
+func (ctrl *ProxmoxController) DeleteInstance(c *fiber.Ctx) error {
+	node := c.Params("node")
+	vmid := c.Params("vmid")
+	type_ := c.Params("type")
+
+	if !utils.IsValidNode(node) || !utils.IsValidVMID(vmid) || !utils.IsValidVMType(type_) {
+		return c.Status(400).JSON(fiber.Map{"error": "invalid parameter format"})
+	}
+
+	userId := c.Locals("userId").(string)
+	role, _ := c.Locals("role").(string)
+
+	if !ctrl.CheckOwnership(userId, role, vmid) {
+		return c.Status(403).JSON(fiber.Map{"error": "Forbidden: You do not own this instance"})
+	}
+
+	// 1. Force delete from Proxmox cluster (includes stop)
+	err := ctrl.proxmoxService.DeleteVM(node, vmid)
+	if err != nil {
+		// Log error but continue deleting from DB to ensure it's removed from UI
+		fmt.Printf("[WARN] Failed to delete VM %s from Proxmox, but will remove from DB. Err: %v\n", vmid, err)
+	}
+
+	// 2. Remove ownership record from SQLite Database
+	if err := database.DB.Where("vmid = ?", vmid).Delete(&models.Server{}).Error; err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to remove VM ownership from database"})
+	}
+
+	return c.JSON(fiber.Map{
+		"status":  "success",
+		"message": "VM has been permanently deleted",
+	})
+}
