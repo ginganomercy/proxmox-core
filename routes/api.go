@@ -7,7 +7,13 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-func RegisterRoutes(app *fiber.App, authCtrl *controllers.AuthController, proxmoxCtrl *controllers.ProxmoxController, voucherCtrl *controllers.VoucherController) {
+func RegisterRoutes(
+	app *fiber.App,
+	authCtrl *controllers.AuthController,
+	proxmoxCtrl *controllers.ProxmoxController,
+	voucherCtrl *controllers.VoucherController,
+	orderCtrl *controllers.OrderController,
+) {
 	api := app.Group("/api")
 
 	// Public Routes
@@ -26,6 +32,17 @@ func RegisterRoutes(app *fiber.App, authCtrl *controllers.AuthController, proxmo
 	vouchers.Post("/", middleware.AdminOnly(), voucherCtrl.GenerateVoucher)
 	vouchers.Get("/", middleware.AdminOnly(), voucherCtrl.GetVouchers)
 	vouchers.Post("/redeem", voucherCtrl.RedeemVoucher)
+
+	// Order Routes
+	orders := protected.Group("/orders")
+	orders.Post("/", orderCtrl.CreateOrder)
+	orders.Get("/me", orderCtrl.GetMyOrders)
+	orders.Post("/:id/activate", orderCtrl.ActivateOrder)
+	
+	// Admin Order Routes
+	adminOrders := protected.Group("/admin/orders", middleware.AdminOnly())
+	adminOrders.Get("/", orderCtrl.GetAllOrders)
+	adminOrders.Post("/:id/generate", orderCtrl.GenerateCode)
 
 	// Proxmox Nodes & Instances
 	proxmox := protected.Group("/proxmox")

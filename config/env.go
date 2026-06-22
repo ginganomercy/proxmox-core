@@ -20,6 +20,10 @@ type Config struct {
 	ProxmoxTokenSecret string
 	ProxmoxNode        string
 	DatabaseURL        string
+	SMTPHost           string
+	SMTPPort           string
+	SMTPUser           string
+	SMTPPass           string
 }
 
 // Env global variable holding config
@@ -43,6 +47,10 @@ func LoadConfig() {
 		ProxmoxTokenSecret: getEnv("PROXMOX_TOKEN_SECRET", ""),
 		ProxmoxNode:        getEnv("PROXMOX_NODE", "pve"),
 		DatabaseURL:        getEnv("DATABASE_URL", "file:./dev.db"),
+		SMTPHost:           getEnv("SMTP_HOST", "smtp.gmail.com"),
+		SMTPPort:           getEnv("SMTP_PORT", "587"),
+		SMTPUser:           getEnv("SMTP_USER", ""),
+		SMTPPass:           getEnv("SMTP_PASS", ""),
 	}
 }
 

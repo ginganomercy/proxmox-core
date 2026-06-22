@@ -39,6 +39,25 @@ type Voucher struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
+type Order struct {
+	ID             string    `gorm:"primaryKey;type:varchar(36)" json:"id"`
+	UserID         string    `gorm:"type:varchar(36);not null" json:"userId"`
+	UserEmail      string    `json:"userEmail"`
+	Node           string    `json:"node"`
+	Name           string    `json:"name"`
+	Cores          int       `json:"cores"`
+	Memory         int       `json:"memory"`
+	Storage        int       `json:"storage"`
+	Ciuser         string    `json:"ciuser"`
+	Cipassword     string    `json:"cipassword"`
+	Ipconfig0      string    `json:"ipconfig0"`
+	TotalCost      float64   `json:"totalCost"`
+	Status         string    `gorm:"default:'PENDING'" json:"status"`
+	ActivationCode string    `gorm:"type:varchar(10)" json:"activationCode"`
+	CreatedAt      time.Time `json:"createdAt"`
+	UpdatedAt      time.Time `json:"updatedAt"`
+}
+
 // BeforeCreate hooks to automatically generate UUIDs
 func (u *User) BeforeCreate(tx *gorm.DB) (err error) {
 	if u.ID == "" {
@@ -57,6 +76,13 @@ func (s *Server) BeforeCreate(tx *gorm.DB) (err error) {
 func (v *Voucher) BeforeCreate(tx *gorm.DB) (err error) {
 	if v.ID == "" {
 		v.ID = uuid.NewString()
+	}
+	return
+}
+
+func (o *Order) BeforeCreate(tx *gorm.DB) (err error) {
+	if o.ID == "" {
+		o.ID = uuid.NewString()
 	}
 	return
 }

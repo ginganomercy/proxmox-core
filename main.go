@@ -59,8 +59,12 @@ func main() {
 	proxmoxService := services.NewProxmoxService(proxmoxClient)
 	proxmoxCtrl := controllers.NewProxmoxController(proxmoxService)
 
+	orderRepo := repositories.NewOrderRepository(database.DB)
+	emailService := services.NewEmailService()
+	orderCtrl := controllers.NewOrderController(orderRepo, userRepo, emailService, proxmoxService)
+
 	// Register Routes
-	routes.RegisterRoutes(app, authCtrl, proxmoxCtrl, voucherCtrl)
+	routes.RegisterRoutes(app, authCtrl, proxmoxCtrl, voucherCtrl, orderCtrl)
 
 	// Start server
 	port := config.Env.Port
