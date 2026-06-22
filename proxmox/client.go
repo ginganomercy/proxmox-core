@@ -81,7 +81,9 @@ func (c *clientImpl) Request(method, endpoint string, body interface{}) ([]byte,
 		}
 
 		req.Header.Set("Authorization", c.authHeader)
-		req.Header.Set("Content-Type", "application/json")
+		if body != nil {
+			req.Header.Set("Content-Type", "application/json")
+		}
 
 		res, err := c.httpClient.Do(req)
 		if err == nil {
