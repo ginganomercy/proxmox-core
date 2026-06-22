@@ -257,20 +257,23 @@ func (ctrl *OrderController) runProvisioningPipeline(order models.Order, userID 
 	log.Printf("[INFO] Clone task started, UPID: %s", cloneUpid)
 
 	// ── Step 3: Poll until clone is fully done (WaitForTask) ────────────────────
-	if err := ctrl.proxmoxService.WaitForTask(order.Node, cloneUpid); err != nil {
-		log.Printf("[ERROR] Clone task %s failed: %v", cloneUpid, err)
-		failOrder("VM clone task failed", err)
-		return
-	}
-	log.Printf("[INFO] Clone task %s done. VM %s unlocked.", cloneUpid, newVmid)
-
-	// ── Rollback helper (used if any post-clone step fails) ─────────────────────
+	// ── Rollback helper — defined BEFORE WaitForTask so it covers ALL post-clone failures ──
 	rollback := func(reason string) {
 		log.Printf("[WARN] Rollback triggered for VMID %s: %s", newVmid, reason)
 		if rbErr := ctrl.proxmoxService.DeleteVM(order.Node, newVmid); rbErr != nil {
 			log.Printf("[ERROR] Rollback failed for VMID %s: %v — manual cleanup required.", newVmid, rbErr)
 		}
 	}
+
+	// ── Step 3: Poll until clone is fully done ───────────────────────────────────
+	if err := ctrl.proxmoxService.WaitForTask(order.Node, cloneUpid); err != nil {
+		log.Printf("[ERROR] Clone task %s failed or timed out: %v", cloneUpid, err)
+		// Attempt rollback — the clone may or may not have finished; best-effort delete.
+		rollback(fmt.Sprintf("WaitForTask failed: %v", err))
+		failOrder("VM clone task failed", err)
+		return
+	}
+	log.Printf("[INFO] Clone task %s done. VM %s unlocked.", cloneUpid, newVmid)
 
 	// ── Step 4: Resize disk ──────────────────────────────────────────────────────
 	const BASE_DISK_SIZE_GB = 3

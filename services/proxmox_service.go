@@ -3,6 +3,8 @@ package services
 import (
 	"encoding/json"
 	"fmt"
+	"log"
+	"net/url"
 	"time"
 
 	"cbt-core-api/proxmox"
@@ -259,14 +261,21 @@ func (s *proxmoxServiceImpl) GetNextVMID() (string, error) {
 	}
 }
 
-// WaitForTask polls a Proxmox UPID task until it completes (OK), fails, or times out.
-// This is the production-grade alternative to time.Sleep, ensuring VM is fully
-// unlocked before issuing follow-up configuration commands.
+// WaitForTask polls a Proxmox UPID task until it completes, fails, or times out.
+//
+// IMPORTANT: Proxmox API task status schema:
+//   - data.status == "running"  → task still in progress, keep polling
+//   - data.status == "stopped"  → task finished; check data.exitstatus
+//     - data.exitstatus == "OK"      → success
+//     - data.exitstatus == anything else → failure with that message
+//
+// Common mistake: checking status=="OK" directly — Proxmox NEVER returns that.
 func (s *proxmoxServiceImpl) WaitForTask(node, upid string) error {
-	// Proxmox task logs endpoint
-	endpoint := fmt.Sprintf("/nodes/%s/tasks/%s/status", node, upid)
+	// URL-encode the UPID: it contains special chars like ':', '|', '@'
+	// which must be percent-encoded in URL paths to avoid API routing errors.
+	encodedUpid := url.PathEscape(upid)
+	endpoint := fmt.Sprintf("/nodes/%s/tasks/%s/status", node, encodedUpid)
 
-	// Poll every 3 seconds, timeout after 10 minutes (large clone on slow storage)
 	const POLL_INTERVAL = 3 * time.Second
 	const TIMEOUT = 10 * time.Minute
 
@@ -275,14 +284,15 @@ func (s *proxmoxServiceImpl) WaitForTask(node, upid string) error {
 	for time.Now().Before(deadline) {
 		body, err := s.client.Get(endpoint)
 		if err != nil {
-			// Transient error, retry on next poll
+			// Transient error (network, 5xx) — retry on next poll cycle
+			log.Printf("[WARN] WaitForTask poll error for %s: %v (retrying)", upid, err)
 			time.Sleep(POLL_INTERVAL)
 			continue
 		}
 
 		var resp map[string]interface{}
 		if err := json.Unmarshal(body, &resp); err != nil {
-			return fmt.Errorf("failed to parse task status: %w", err)
+			return fmt.Errorf("failed to parse task status response: %w", err)
 		}
 
 		data, ok := resp["data"].(map[string]interface{})
@@ -291,17 +301,25 @@ func (s *proxmoxServiceImpl) WaitForTask(node, upid string) error {
 			continue
 		}
 
+		// Proxmox task lifecycle: running → stopped
 		status, _ := data["status"].(string)
 
 		switch status {
-		case "OK":
-			return nil
-		case "error":
+		case "stopped":
+			// Task has finished — inspect exitstatus for success/failure
 			exitStatus, _ := data["exitstatus"].(string)
-			return fmt.Errorf("proxmox task failed with status: %s", exitStatus)
+			if exitStatus == "OK" {
+				return nil // ✅ Success
+			}
+			// Any non-OK exitstatus means failure (e.g. "error", "interrupted")
+			return fmt.Errorf("proxmox task failed with exitstatus: %q", exitStatus)
+		case "running":
+			// Still running — keep polling
+		default:
+			// Unknown status — log and keep polling defensively
+			log.Printf("[WARN] WaitForTask: unexpected status %q for task %s", status, upid)
 		}
 
-		// status is still "running", keep polling
 		time.Sleep(POLL_INTERVAL)
 	}
 
