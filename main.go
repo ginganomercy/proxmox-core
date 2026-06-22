@@ -31,8 +31,13 @@ func main() {
 	proxmox.InitCache()
 
 	// Initialize Fiber app
+	// ReadTimeout and WriteTimeout MUST be longer than the slowest possible request.
+	// VM provisioning (Clone → Wait → Resize → CloudInit → PowerOn) can take up to 5 minutes.
 	app := fiber.New(fiber.Config{
-		AppName: "Cloud Baja Tegal - Core API",
+		AppName:      "Cloud Baja Tegal - Core API",
+		ReadTimeout:  10 * time.Minute, // Cover max VM provisioning duration
+		WriteTimeout: 10 * time.Minute,
+		IdleTimeout:  2 * time.Minute,
 	})
 
 	// Middleware
@@ -46,8 +51,11 @@ func main() {
 	}
 
 	app.Use(cors.New(cors.Config{
-		AllowOrigins: allowedOrigins,
-		AllowHeaders: "Origin, Content-Type, Accept, Authorization",
+		AllowOrigins:     allowedOrigins,
+		AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
+		AllowMethods:     "GET, POST, PUT, DELETE, OPTIONS",
+		AllowCredentials: false,
+		MaxAge:           86400, // Cache OPTIONS preflight for 24h to reduce redundant requests
 	}))
 
 	// Initialize Dependencies (Clean Architecture)
@@ -92,7 +100,8 @@ func main() {
 	_, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	if err := app.ShutdownWithTimeout(10 * time.Second); err != nil {
+	// Allow up to 6 minutes for in-flight requests (e.g. VM provisioning) to complete gracefully.
+	if err := app.ShutdownWithTimeout(6 * time.Minute); err != nil {
 		log.Fatalf("Server forced to shutdown: %v", err)
 	}
 
