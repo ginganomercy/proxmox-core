@@ -76,7 +76,8 @@ func (ctrl *OrderController) CreateOrder(c *fiber.Ctx) error {
 		Storage:    req.Storage,
 		Ciuser:     req.Ciuser,
 		Cipassword: req.Cipassword,
-		Ipconfig0:  req.Ipconfig0,
+		// Ipconfig0 will be auto-generated during provisioning based on VMID
+		Ipconfig0:  "",
 		TotalCost:  totalCost,
 		Status:     "PENDING",
 	}
@@ -315,12 +316,15 @@ func (ctrl *OrderController) runProvisioningPipeline(order models.Order, userID 
 	}
 
 	// ── Step 5: Apply Cloud-Init config ─────────────────────────────────────────
+	// Auto-generate static IP based on VMID (e.g., 104 -> 172.17.2.104/24)
+	autoIpconfig0 := fmt.Sprintf("ip=172.17.2.%s/24,gw=172.17.2.1", newVmid)
+	
 	ciConfig := VMConfigRequest{
 		Cores:      &order.Cores,
 		Memory:     &order.Memory,
 		CIUser:     &order.Ciuser,
 		CIPassword: &order.Cipassword,
-		IPConfig0:  &order.Ipconfig0,
+		IPConfig0:  &autoIpconfig0,
 	}
 	if err := ctrl.proxmoxService.UpdateVMConfig(order.Node, "qemu", newVmid, ciConfig); err != nil {
 		rollback(fmt.Sprintf("UpdateVMConfig failed: %v", err))
