@@ -12,6 +12,7 @@ func RegisterRoutes(app *fiber.App, authCtrl *controllers.AuthController, proxmo
 
 	// Public Routes
 	auth := api.Group("/auth")
+	auth.Post("/register", authCtrl.Register)
 	auth.Post("/login", authCtrl.Login)
 
 	// Protected Routes

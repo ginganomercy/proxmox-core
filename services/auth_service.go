@@ -13,6 +13,7 @@ import (
 )
 
 type AuthService interface {
+	Register(username, password string) error
 	Login(username, password string) (string, error)
 	GetMe(id string) (*models.User, error)
 	EnsureAdminExists() error
@@ -41,6 +42,30 @@ func (s *authServiceImpl) EnsureAdminExists() error {
 		return s.userRepo.Create(&admin)
 	}
 	return nil
+}
+
+func (s *authServiceImpl) Register(username, password string) error {
+	s.EnsureAdminExists()
+
+	// Check if username already exists
+	_, err := s.userRepo.FindByUsername(username)
+	if err == nil {
+		return errors.New("username already taken")
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return errors.New("failed to hash password")
+	}
+
+	user := models.User{
+		Username:     username,
+		PasswordHash: string(hash),
+		Role:         "USER", // Default role for new signups
+		Balance:      0.0,
+	}
+
+	return s.userRepo.Create(&user)
 }
 
 func (s *authServiceImpl) Login(username, password string) (string, error) {
