@@ -63,9 +63,10 @@ func main() {
 
 	orderRepo := repositories.NewOrderRepository(database.DB)
 	orderCtrl := controllers.NewOrderController(orderRepo, userRepo, emailService, proxmoxService)
+	adminCtrl := controllers.NewAdminController()
 
 	// Register Routes
-	routes.RegisterRoutes(app, authCtrl, ssoCtrl, proxmoxCtrl, voucherCtrl, orderCtrl)
+	routes.RegisterRoutes(app, authCtrl, ssoCtrl, proxmoxCtrl, voucherCtrl, orderCtrl, adminCtrl)
 
 	// Start server
 	port := config.Env.Port

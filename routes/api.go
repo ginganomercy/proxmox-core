@@ -14,6 +14,7 @@ func RegisterRoutes(
 	proxmoxCtrl *controllers.ProxmoxController,
 	voucherCtrl *controllers.VoucherController,
 	orderCtrl *controllers.OrderController,
+	adminCtrl *controllers.AdminController,
 ) {
 	api := app.Group("/api")
 
@@ -48,6 +49,9 @@ func RegisterRoutes(
 	adminOrders := protected.Group("/admin/orders", middleware.AdminOnly())
 	adminOrders.Get("/", orderCtrl.GetAllOrders)
 	adminOrders.Post("/:id/generate", orderCtrl.GenerateCode)
+
+	// Admin Summary Route
+	protected.Get("/admin/summary", middleware.AdminOnly(), adminCtrl.GetDashboardSummary)
 
 	// Proxmox Nodes & Instances
 	proxmox := protected.Group("/proxmox")
