@@ -128,10 +128,11 @@ func (ctrl *OrderController) GenerateCode(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Order is not PENDING"})
 	}
 
-	// Get user info for the email
-	user, err := ctrl.userRepo.FindByID(order.UserID)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch user data"})
+	// Get user info for the email (Toleran terhadap error misal user sudah terhapus)
+	user, _ := ctrl.userRepo.FindByID(order.UserID)
+	username := "Customer"
+	if user != nil && user.Username != "" {
+		username = user.Username
 	}
 
 	// Generate 6-char random code using cryptographically secure source
@@ -145,7 +146,7 @@ func (ctrl *OrderController) GenerateCode(c *fiber.Ctx) error {
 
 	// Send Email asynchronously — fire-and-forget with structured error log
 	go func() {
-		if err := ctrl.emailService.SendActivationCode(order.UserEmail, user.Username, order.Name, code); err != nil {
+		if err := ctrl.emailService.SendActivationCode(order.UserEmail, username, order.Name, code); err != nil {
 			log.Printf("[ERROR] Failed to send activation email to %s: %v", order.UserEmail, err)
 		}
 	}()
