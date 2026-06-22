@@ -44,8 +44,10 @@ type Order struct {
 	Cipassword     string    `json:"cipassword"`
 	Ipconfig0      string    `json:"ipconfig0"`
 	TotalCost      float64   `json:"totalCost"`
+	// Status flow: PENDING → READY_TO_ACTIVATE → PROVISIONING → COMPLETED | FAILED
 	Status         string    `gorm:"default:'PENDING'" json:"status"`
 	ActivationCode string    `gorm:"type:varchar(10)" json:"activationCode"`
+	ProvisionError string    `gorm:"type:text" json:"provisionError,omitempty"` // Set on FAILED
 	CreatedAt      time.Time `json:"createdAt"`
 	UpdatedAt      time.Time `json:"updatedAt"`
 }
