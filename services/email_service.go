@@ -36,15 +36,63 @@ func (s *emailServiceImpl) SendActivationCode(toEmail, username, orderName, acti
 
 	auth := smtp.PlainAuth("", user, pass, host)
 
-	subject := "Your CBT Activation Code for " + orderName
-	body := fmt.Sprintf("Hello %s,\n\nYour payment has been confirmed! Here is your Activation Code to provision your VM: %s\n\nPlease enter this code on the CBT Dashboard to start your server.\n\nThank you for choosing Cloud Baja Tegal.", username, activationCode)
+	htmlBody := fmt.Sprintf(`
+	<!DOCTYPE html>
+	<html>
+	<head>
+		<meta charset="UTF-8">
+		<style>
+			body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8fafc; margin: 0; padding: 20px; color: #334155; }
+			.container { max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+			.header { background: linear-gradient(135deg, #4f46e5 0%%, #3b82f6 100%%); color: white; padding: 30px 20px; text-align: center; }
+			.header h1 { margin: 0; font-size: 24px; font-weight: 800; }
+			.content { padding: 30px 20px; }
+			.content p { line-height: 1.6; margin-bottom: 20px; }
+			.code-box { background-color: #eef2ff; border: 2px dashed #6366f1; border-radius: 12px; padding: 20px; text-align: center; margin: 30px 0; }
+			.code { font-size: 32px; font-weight: 900; color: #4f46e5; letter-spacing: 4px; font-family: monospace; }
+			.footer { background-color: #f8fafc; padding: 20px; text-align: center; font-size: 12px; color: #94a3b8; border-top: 1px solid #e2e8f0; }
+		</style>
+	</head>
+	<body>
+		<div class="container">
+			<div class="header">
+				<h1>Cloud Baja Tegal</h1>
+				<p style="margin: 5px 0 0 0; opacity: 0.9;">Aktivasi Virtual Machine</p>
+			</div>
+			<div class="content">
+				<p>Halo <strong>%s</strong>,</p>
+				<p>Pembayaran Anda untuk pesanan <strong>%s</strong> telah kami konfirmasi! VM Anda kini siap untuk dihidupkan (Provisioning).</p>
+				<p>Silakan salin 6-digit Kode Aktivasi di bawah ini dan masukkan ke dalam Dashboard CBT Anda:</p>
+				
+				<div class="code-box">
+					<div class="code">%s</div>
+				</div>
 
-	msg := []byte("To: " + toEmail + "\r\n" +
-		"Subject: " + subject + "\r\n" +
-		"\r\n" +
-		body + "\r\n")
+				<p>Terima kasih telah mempercayakan infrastruktur cloud Anda kepada Cloud Baja Tegal.</p>
+			</div>
+			<div class="footer">
+				&copy; 2026 Cloud Baja Tegal. All rights reserved.<br>
+				Pesan ini dibuat otomatis oleh sistem.
+			</div>
+		</div>
+	</body>
+	</html>
+	`, username, orderName, activationCode)
 
-	err := smtp.SendMail(host+":"+port, auth, user, []string{toEmail}, msg)
+	headers := make(map[string]string)
+	headers["From"] = user
+	headers["To"] = toEmail
+	headers["Subject"] = "Kode Aktivasi VM: " + orderName
+	headers["MIME-Version"] = "1.0"
+	headers["Content-Type"] = "text/html; charset=\"UTF-8\""
+
+	message := ""
+	for k, v := range headers {
+		message += fmt.Sprintf("%s: %s\r\n", k, v)
+	}
+	message += "\r\n" + htmlBody
+
+	err := smtp.SendMail(host+":"+port, auth, user, []string{toEmail}, []byte(message))
 	return err
 }
 
@@ -64,16 +112,64 @@ func (s *emailServiceImpl) SendPasswordReset(toEmail, username, resetToken strin
 
 	auth := smtp.PlainAuth("", user, pass, host)
 
-	subject := "Password Reset Request - Cloud Baja Tegal"
 	resetLink := fmt.Sprintf("https://cloud-dashboard.pbjt.web.id/reset-password?token=%s", resetToken)
-	body := fmt.Sprintf("Hello %s,\n\nYou recently requested to reset your password for your Cloud Baja Tegal account.\n\nClick the link below to reset it:\n%s\n\nIf you did not request a password reset, please ignore this email or reply to let us know. This password reset is only valid for the next 1 hour.\n\nThanks,\nThe CBT Team", username, resetLink)
+	
+	htmlBody := fmt.Sprintf(`
+	<!DOCTYPE html>
+	<html>
+	<head>
+		<meta charset="UTF-8">
+		<style>
+			body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8fafc; margin: 0; padding: 20px; color: #334155; }
+			.container { max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+			.header { background: linear-gradient(135deg, #ef4444 0%%, #f97316 100%%); color: white; padding: 30px 20px; text-align: center; }
+			.header h1 { margin: 0; font-size: 24px; font-weight: 800; }
+			.content { padding: 30px 20px; }
+			.content p { line-height: 1.6; margin-bottom: 20px; }
+			.btn { display: inline-block; background-color: #ef4444; color: white; text-decoration: none; font-weight: bold; padding: 14px 24px; border-radius: 12px; margin-top: 10px; text-align: center; }
+			.footer { background-color: #f8fafc; padding: 20px; text-align: center; font-size: 12px; color: #94a3b8; border-top: 1px solid #e2e8f0; }
+		</style>
+	</head>
+	<body>
+		<div class="container">
+			<div class="header">
+				<h1>Cloud Baja Tegal</h1>
+				<p style="margin: 5px 0 0 0; opacity: 0.9;">Reset Password Akun</p>
+			</div>
+			<div class="content">
+				<p>Halo <strong>%s</strong>,</p>
+				<p>Kami menerima permintaan untuk mereset kata sandi (password) akun Cloud Baja Tegal Anda.</p>
+				<p>Jika Anda merasa melakukan permintaan ini, silakan klik tombol di bawah ini untuk mengatur kata sandi baru. Link ini hanya berlaku selama 1 jam.</p>
+				
+				<div style="text-align: center; margin: 30px 0;">
+					<a href="%s" class="btn">Reset Password Sekarang</a>
+				</div>
 
-	msg := []byte("To: " + toEmail + "\r\n" +
-		"Subject: " + subject + "\r\n" +
-		"\r\n" +
-		body + "\r\n")
+				<p style="font-size: 13px; color: #64748b;">Jika Anda tidak pernah meminta reset password, abaikan email ini. Akun Anda tetap aman.</p>
+			</div>
+			<div class="footer">
+				&copy; 2026 Cloud Baja Tegal. All rights reserved.<br>
+				Pesan ini dibuat otomatis oleh sistem.
+			</div>
+		</div>
+	</body>
+	</html>
+	`, username, resetLink)
 
-	err := smtp.SendMail(host+":"+port, auth, user, []string{toEmail}, msg)
+	headers := make(map[string]string)
+	headers["From"] = user
+	headers["To"] = toEmail
+	headers["Subject"] = "Reset Password Request - Cloud Baja Tegal"
+	headers["MIME-Version"] = "1.0"
+	headers["Content-Type"] = "text/html; charset=\"UTF-8\""
+
+	message := ""
+	for k, v := range headers {
+		message += fmt.Sprintf("%s: %s\r\n", k, v)
+	}
+	message += "\r\n" + htmlBody
+
+	err := smtp.SendMail(host+":"+port, auth, user, []string{toEmail}, []byte(message))
 	return err
 }
 
