@@ -375,7 +375,7 @@ func (s *proxmoxServiceImpl) ResizeDisk(node, vmType, vmid, disk, size string) e
 		"disk": disk,
 		"size": size,
 	}
-	_, err := s.client.Post(endpoint, payload)
+	_, err := s.client.Put(endpoint, payload)
 	return err
 }
 

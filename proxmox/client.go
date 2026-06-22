@@ -17,6 +17,7 @@ import (
 type ProxmoxClient interface {
 	Get(endpoint string) ([]byte, error)
 	Post(endpoint string, body interface{}) ([]byte, error)
+	Put(endpoint string, body interface{}) ([]byte, error)
 	Delete(endpoint string) ([]byte, error)
 }
 
@@ -117,6 +118,11 @@ func (c *clientImpl) Get(endpoint string) ([]byte, error) {
 // Post performs a POST request
 func (c *clientImpl) Post(endpoint string, body interface{}) ([]byte, error) {
 	return c.Request(http.MethodPost, endpoint, body)
+}
+
+// Put performs a PUT request
+func (c *clientImpl) Put(endpoint string, body interface{}) ([]byte, error) {
+	return c.Request(http.MethodPut, endpoint, body)
 }
 
 // Delete performs a DELETE request
