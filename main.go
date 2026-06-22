@@ -1,8 +1,12 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"cbt-core-api/config"
 	"cbt-core-api/controllers"
@@ -67,10 +71,37 @@ func main() {
 	// Register Routes
 	routes.RegisterRoutes(app, authCtrl, ssoCtrl, proxmoxCtrl, orderCtrl, adminCtrl)
 
-	// Start server
+	// Start server in a separate goroutine
 	port := config.Env.Port
-	log.Printf("Starting CBT Core API (Go) on port %s", port)
-	if err := app.Listen(":" + port); err != nil {
-		log.Fatalf("Error starting server: %v", err)
+	go func() {
+		log.Printf("Starting CBT Core API (Go) on port %s", port)
+		if err := app.Listen(":" + port); err != nil {
+			log.Fatalf("Error starting server: %v", err)
+		}
+	}()
+
+	// Graceful Shutdown Setup
+	quit := make(chan os.Signal, 1)
+	// Catch SIGINT (Ctrl+C) and SIGTERM (Docker stop)
+	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
+
+	<-quit
+	log.Println("Gracefully shutting down server...")
+
+	// Create a deadline to wait for currently serving requests to finish
+	_, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := app.ShutdownWithTimeout(10 * time.Second); err != nil {
+		log.Fatalf("Server forced to shutdown: %v", err)
 	}
+
+	// Close database connection
+	sqlDB, err := database.DB.DB()
+	if err == nil {
+		sqlDB.Close()
+		log.Println("Database connection closed.")
+	}
+
+	log.Println("Server exiting")
 }

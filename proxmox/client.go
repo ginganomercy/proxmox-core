@@ -52,41 +52,61 @@ func NewClient() (ProxmoxClient, error) {
 	}, nil
 }
 
-// Request performs an HTTP request to the Proxmox API
+// Request performs an HTTP request to the Proxmox API with Retry & Exponential Backoff
 func (c *clientImpl) Request(method, endpoint string, body interface{}) ([]byte, error) {
-	var bodyReader io.Reader
+	var jsonBody []byte
+	var err error
+
 	if body != nil {
-		jsonBody, err := json.Marshal(body)
+		jsonBody, err = json.Marshal(body)
 		if err != nil {
 			return nil, err
 		}
-		bodyReader = bytes.NewBuffer(jsonBody)
 	}
 
-	req, err := http.NewRequest(method, c.baseURL+endpoint, bodyReader)
-	if err != nil {
-		return nil, err
+	maxRetries := 3
+	baseDelay := 500 * time.Millisecond
+	var lastErr error
+
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		var bodyReader io.Reader
+		if body != nil {
+			bodyReader = bytes.NewBuffer(jsonBody)
+		}
+
+		req, err := http.NewRequest(method, c.baseURL+endpoint, bodyReader)
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Authorization", c.authHeader)
+		req.Header.Set("Content-Type", "application/json")
+
+		res, err := c.httpClient.Do(req)
+		if err == nil {
+			defer res.Body.Close()
+			resBody, err := io.ReadAll(res.Body)
+			if err != nil {
+				return nil, err
+			}
+
+			// Don't retry on 4xx client errors (e.g. Unauthorized, Not Found)
+			if res.StatusCode < 500 {
+				if res.StatusCode >= 400 {
+					return nil, fmt.Errorf("proxmox API error: %d - %s", res.StatusCode, string(resBody))
+				}
+				return resBody, nil
+			}
+			lastErr = fmt.Errorf("proxmox server error: %d - %s", res.StatusCode, string(resBody))
+		} else {
+			lastErr = err
+		}
+
+		// Retry delay (Exponential backoff)
+		time.Sleep(baseDelay * time.Duration(1<<attempt))
 	}
 
-	req.Header.Set("Authorization", c.authHeader)
-	req.Header.Set("Content-Type", "application/json")
-
-	res, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer res.Body.Close()
-
-	resBody, err := io.ReadAll(res.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	if res.StatusCode >= 400 {
-		return nil, fmt.Errorf("proxmox API error: %d - %s", res.StatusCode, string(resBody))
-	}
-
-	return resBody, nil
+	return nil, fmt.Errorf("failed after %d attempts, last error: %v", maxRetries, lastErr)
 }
 
 // Get performs a GET request
