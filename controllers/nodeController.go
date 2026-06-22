@@ -5,6 +5,7 @@ import (
 	"cbt-core-api/models"
 	"cbt-core-api/services"
 	"cbt-core-api/utils"
+	"strconv"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -90,6 +91,10 @@ func (ctrl *ProxmoxController) CheckOwnership(userId, role, vmid string) bool {
 		return true
 	}
 	var count int64
-	database.DB.Model(&models.Server{}).Where("user_id = ? AND vmid = ?", userId, vmid).Count(&count)
+	vmidInt, err := strconv.Atoi(vmid)
+	if err != nil {
+		return false
+	}
+	database.DB.Model(&models.Server{}).Where("user_id = ? AND vmid = ?", userId, vmidInt).Count(&count)
 	return count > 0
 }
