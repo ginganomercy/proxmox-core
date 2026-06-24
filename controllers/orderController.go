@@ -101,13 +101,56 @@ func (ctrl *OrderController) CreateOrder(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusCreated).JSON(order)
 }
 
+func (ctrl *OrderController) reconcileOrdersWithProxmox(orders []models.Order) []models.Order {
+	// 1. Fetch active instances from Proxmox across nodes (or default node 'pve' / first node)
+	nodes, err := ctrl.proxmoxService.GetNodes()
+	if err != nil || len(nodes) == 0 {
+		return orders // fallback to DB state if Proxmox API is unreachable
+	}
+
+	activeVMNames := make(map[string]bool)
+	for _, n := range nodes {
+		if nodeMap, ok := n.(map[string]interface{}); ok {
+			nodeName, _ := nodeMap["node"].(string)
+			if nodeName != "" {
+				instances, _ := ctrl.proxmoxService.GetInstances(nodeName)
+				for _, inst := range instances {
+					if instMap, ok := inst.(map[string]interface{}); ok {
+						vmName, _ := instMap["name"].(string)
+						if vmName != "" {
+							activeVMNames[vmName] = true
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// 2. Reconcile COMPLETED orders against active VM names
+	for i := range orders {
+		if orders[i].Status == "COMPLETED" {
+			// If the VM name no longer exists in Proxmox VE at all ("sesuai dengan proxmox aslinya")
+			if !activeVMNames[orders[i].Name] {
+				log.Printf("[INFO] Reconciling obsolete COMPLETED order %s (%s) -> DELETED (not found in Proxmox VE)", orders[i].ID, orders[i].Name)
+				orders[i].Status = "DELETED"
+				ctrl.orderRepo.Update(&orders[i])
+				// Also clean up obsolete server record if any
+				database.DB.Where("name = ?", orders[i].Name).Delete(&models.Server{})
+			}
+		}
+	}
+
+	return orders
+}
+
 func (ctrl *OrderController) GetMyOrders(c *fiber.Ctx) error {
 	userID := c.Locals("userId").(string)
 	orders, err := ctrl.orderRepo.FindByUserID(userID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch orders"})
 	}
-	return c.JSON(orders)
+	reconciled := ctrl.reconcileOrdersWithProxmox(orders)
+	return c.JSON(reconciled)
 }
 
 func (ctrl *OrderController) GetAllOrders(c *fiber.Ctx) error {
@@ -115,7 +158,8 @@ func (ctrl *OrderController) GetAllOrders(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch orders"})
 	}
-	return c.JSON(orders)
+	reconciled := ctrl.reconcileOrdersWithProxmox(orders)
+	return c.JSON(reconciled)
 }
 
 func (ctrl *OrderController) DeleteOrder(c *fiber.Ctx) error {
