@@ -34,6 +34,14 @@ func (ctrl *ProxmoxController) GetClusterLogs(c *fiber.Ctx) error {
 	return c.JSON(data)
 }
 
+func (ctrl *ProxmoxController) GetClusterTasks(c *fiber.Ctx) error {
+	data, err := ctrl.proxmoxService.GetClusterTasks()
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+	}
+	return c.JSON(data)
+}
+
 func (ctrl *ProxmoxController) GetNodeStatus(c *fiber.Ctx) error {
 	node := c.Params("node")
 

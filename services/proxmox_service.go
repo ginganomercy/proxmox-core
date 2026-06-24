@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/url"
+	"sort"
 	"time"
 
 	"cbt-core-api/proxmox"
@@ -34,6 +35,7 @@ type ProxmoxService interface {
 	// Production-grade: Delete a VM for rollback purposes
 	DeleteVM(node, vmid string) error
 	GetClusterLogs() ([]interface{}, error)
+	GetClusterTasks() ([]interface{}, error)
 }
 
 type proxmoxServiceImpl struct {
@@ -69,6 +71,49 @@ func (s *proxmoxServiceImpl) GetClusterLogs() ([]interface{}, error) {
 	json.Unmarshal(body, &response)
 	data, _ := response["data"].([]interface{})
 	return data, nil
+}
+
+func (s *proxmoxServiceImpl) GetClusterTasks() ([]interface{}, error) {
+	nodes, err := s.GetNodes()
+	if err != nil || len(nodes) == 0 {
+		return nil, fmt.Errorf("failed to retrieve cluster nodes for tasks")
+	}
+
+	var allTasks []interface{}
+	for _, nodeObj := range nodes {
+		if nodeMap, ok := nodeObj.(map[string]interface{}); ok {
+			if nodeName, ok := nodeMap["node"].(string); ok {
+				cacheKey := fmt.Sprintf("node_tasks_%s", nodeName)
+				body, err := s.fetchWithCache(cacheKey, fmt.Sprintf("/nodes/%s/tasks", nodeName), 5*time.Second)
+				if err == nil {
+					var resp map[string]interface{}
+					if json.Unmarshal(body, &resp) == nil {
+						if tasks, ok := resp["data"].([]interface{}); ok {
+							for _, taskObj := range tasks {
+								if taskMap, ok := taskObj.(map[string]interface{}); ok {
+									taskMap["node"] = nodeName
+									allTasks = append(allTasks, taskMap)
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	sort.Slice(allTasks, func(i, j int) bool {
+		m1, ok1 := allTasks[i].(map[string]interface{})
+		m2, ok2 := allTasks[j].(map[string]interface{})
+		if !ok1 || !ok2 {
+			return false
+		}
+		t1, _ := m1["starttime"].(float64)
+		t2, _ := m2["starttime"].(float64)
+		return t1 > t2
+	})
+
+	return allTasks, nil
 }
 
 func (s *proxmoxServiceImpl) GetNodes() ([]interface{}, error) {

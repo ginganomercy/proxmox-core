@@ -51,6 +51,7 @@ func RegisterRoutes(
 	proxmox := protected.Group("/proxmox")
 	proxmox.Get("/nodes", proxmoxCtrl.GetNodes)
 	proxmox.Get("/cluster/logs", middleware.AdminOnly(), proxmoxCtrl.GetClusterLogs)
+	proxmox.Get("/cluster/tasks", middleware.AdminOnly(), proxmoxCtrl.GetClusterTasks)
 	proxmox.Get("/nodes/:node/status", proxmoxCtrl.GetNodeStatus)
 	proxmox.Get("/nodes/:node/instances", proxmoxCtrl.GetInstances)
 	proxmox.Get("/nodes/:node/:type/:vmid/ip", proxmoxCtrl.GetInstanceIP)
