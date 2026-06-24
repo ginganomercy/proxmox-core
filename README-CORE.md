@@ -1,66 +1,153 @@
-# 🧠 Proxmox Core API
+# CBT Core API — Backend Service
 
-This is the central Backend Microservice for the **Proxmox Custom Dashboard**. It handles authentication, secure data storage, caching, and acts as the secure bridge to your underlying Proxmox VE Nodes.
-
-## 🚀 Tech Stack
-
-- **Go (v1.26)**: Core language, offering extreme performance and memory safety.
-- **Fiber v2**: Web framework inspired by Express.js, built on top of `fasthttp` for maximum throughput.
-- **SQLite (via go-sqlite3)**: Zero-configuration local database for storing user credentials and lightweight metadata.
-- **GORM**: The most popular Object-Relational Mapper (ORM) for Go, ensuring safe and developer-friendly database queries.
-- **JWT v5**: Stateless JSON Web Token authentication.
-- **Go-Cache**: In-memory caching mechanism to prevent spamming the Proxmox API with redundant requests, resulting in instant dashboard loads.
+**Go + Fiber v2 REST API for the Cloud Baja Tegal Proxmox Dashboard**
 
 ---
 
-## 📂 Folder Structure
+## Overview
 
-```text
-core-api/
-├── .github/workflows/   # CI/CD Deployment pipelines (Trivy & Tailscale)
-├── config/              # Environment variable parsers and configurations
-├── controllers/         # HTTP Route Handlers (Auth, Nodes, VMs, Metrics)
-├── database/            # SQLite connection setup and GORM initialization
-├── middleware/          # Fiber Middlewares (JWT Guard for protected routes)
-├── models/              # GORM Database Schemas (User table, etc.)
-├── proxmox/             # Native HTTP Client & Cacher for Proxmox VE API
-├── repositories/        # Database Access Layer (Domain logic isolation)
-├── routes/              # API Route Registrations (/api/v1/...)
-├── services/            # Core Business Logic (Auth validations)
-├── main.go              # Entrypoint of the application
-├── Dockerfile           # Multi-stage production Docker build
-└── go.mod               # Go module dependencies
+The Core API is the central backend service for the Cloud Baja Tegal (CBT) platform. It handles:
+
+- **User authentication** (JWT, Google OAuth2, password reset via email)
+- **Order management** (VM order submission, activation, provisioning lifecycle)
+- **Proxmox VE orchestration** (node status, VM lifecycle, snapshots, metrics, VNC proxy)
+- **Admin operations** (dashboard summary, order approvals, cluster log aggregation)
+
+---
+
+## Tech Stack
+
+| Component | Technology |
+| :--- | :--- |
+| Language | Go 1.25 |
+| HTTP Framework | Fiber v2 (`github.com/gofiber/fiber/v2`) |
+| Database | SQLite via GORM (`gorm.io/driver/sqlite`) |
+| In-Memory Cache | `patrickmn/go-cache` (5s TTL on Proxmox calls) |
+| JWT | `golang-jwt/jwt/v5` |
+| OAuth2 | `golang.org/x/oauth2` |
+| Password | bcrypt via `golang.org/x/crypto` |
+
+---
+
+## API Endpoints
+
+Base prefix: `/api`
+
+### Public
+| Method | Path | Description |
+| :--- | :--- | :--- |
+| POST | `/auth/register` | Create account |
+| POST | `/auth/login` | Login (returns JWT cookie) |
+| POST | `/auth/forgot-password` | Initiate password reset |
+| POST | `/auth/reset-password` | Complete password reset |
+| GET | `/auth/google` | Start Google SSO |
+| GET | `/auth/google/callback` | Google SSO callback |
+
+### Protected (JWT Required)
+| Method | Path | Description |
+| :--- | :--- | :--- |
+| GET | `/auth/me` | Get current user |
+| POST | `/orders/` | Submit VM order |
+| GET | `/orders/me` | Get my orders |
+| POST | `/orders/:id/activate` | Activate with code |
+| DELETE | `/orders/:id` | Cancel order |
+| GET | `/proxmox/nodes` | List cluster nodes |
+| GET | `/proxmox/nodes/:node/status` | Node resource status |
+| GET | `/proxmox/nodes/:node/instances` | List VMs on node |
+| GET | `/proxmox/nodes/:node/:type/:vmid/ip` | VM IP address |
+| POST | `/proxmox/nodes/:node/qemu/:vmid/power` | VM power action |
+| POST | `/proxmox/nodes/:node/qemu/:vmid/config` | Update VM config |
+| POST | `/proxmox/nodes/:node/:type/:vmid/vncproxy` | Get VNC ticket |
+| DELETE | `/proxmox/nodes/:node/:type/:vmid` | Delete VM |
+| GET/POST | `/proxmox/nodes/:node/:type/:vmid/snapshots` | Snapshot management |
+| POST | `/proxmox/nodes/:node/:type/:vmid/rebuild` | Rebuild VM |
+| GET | `/proxmox/nodes/:node/:type/:vmid/rrddata` | VM metrics |
+| GET | `/proxmox/nodes/:node/rrddata` | Node metrics |
+
+### Admin Only (JWT + ADMIN role)
+| Method | Path | Description |
+| :--- | :--- | :--- |
+| GET | `/admin/summary` | Dashboard stats |
+| GET | `/admin/orders/` | All customer orders |
+| POST | `/admin/orders/:id/generate` | Generate activation code |
+| GET | `/proxmox/cluster/logs` | Cluster syslog |
+| GET | `/proxmox/cluster/tasks` | Task log (all nodes) |
+| POST | `/proxmox/vms` | Provision VM |
+
+---
+
+## Environment Variables
+
+```env
+PORT=3001
+JWT_SECRET=<min-32-char-secret>
+PROXMOX_HOST=https://proxmox.pbjt.web.id:8006
+PROXMOX_TOKEN_ID=root@pam!mytoken
+PROXMOX_TOKEN_SECRET=<token-secret>
+DB_PATH=/app/data/proxmox.db
+CORS_ALLOWED_ORIGINS=https://cloud-dashboard.pbjt.web.id,http://localhost:5173
+BASE_VMID=<template-vmid>
+
+# Optional — Google SSO
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+GOOGLE_REDIRECT_URL=
+
+# Optional — SMTP (password reset)
+SMTP_HOST=
+SMTP_PORT=
+SMTP_USER=
+SMTP_PASS=
+SMTP_FROM=
 ```
 
 ---
 
-## 🛠️ Local Development Setup
+## Local Development
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/ginganomercy/proxmox-core.git
-   cd proxmox-core
-   ```
+```bash
+go mod download
+cp .env.example .env    # Fill credentials
+go run .
+# Listening on :3001
+```
 
-2. **Prepare Environment Variables:**
-   Copy the example file and fill in your real Proxmox VE credentials.
-   ```bash
-   cp .env.example .env
-   ```
+## Production Build
 
-3. **Install Dependencies & Run:**
-   ```bash
-   go mod download
-   go run main.go
-   ```
-   *The server will start on `http://localhost:3001`.*
+```bash
+CGO_ENABLED=1 GOOS=linux go build -o core-api .
+```
+
+## Docker
+
+```bash
+# Build
+docker build -t ghcr.io/ginganomercy/proxmox-core:latest .
+
+# Run
+docker run --env-file .env -p 3001:3001 ghcr.io/ginganomercy/proxmox-core:latest
+```
 
 ---
 
-## 🔒 CI/CD & Deployment
+## CI/CD
 
-This service utilizes an **Enterprise-Grade GitHub Actions Pipeline**:
-1. **Linting & Code Quality**: Validates code using `golangci-lint` and `go vet`.
-2. **Docker Build**: Packages the binary securely and pushes it to GitHub Container Registry (`ghcr.io`).
-3. **DevSecOps**: Scans the Docker image using **Trivy** to block critical CVEs from being deployed.
-4. **Zero-Trust Deployment**: Connects to your private Swarm Manager via **Tailscale** and automatically updates the service using SSH without exposing ports to the public internet.
+On every push to `main`:
+
+1. **Go Vet & Lint** — `go vet ./...`
+2. **Build & Push** → `ghcr.io/ginganomercy/proxmox-core:latest`
+3. **Trivy Security Scan** — blocks on CRITICAL CVEs
+4. **Deploy to Swarm** — via Tailscale + SSH → `docker service update --force`
+
+---
+
+## Key Design Decisions
+
+| Decision | Rationale |
+| :--- | :--- |
+| **SQLite over PostgreSQL** | Single-node deployment simplicity; NFS-backed for persistence |
+| **In-memory cache (5s TTL)** | Reduces Proxmox API polling load while maintaining near-real-time freshness |
+| **`/nodes/{node}/tasks` per node** | The Proxmox VE REST API has no `/cluster/tasks` endpoint; tasks are archived per-node daemon |
+| **10-minute Fiber timeouts** | VM provisioning (clone → resize → cloud-init → power on) can take up to 5 minutes |
+| **6-minute graceful shutdown** | Allows in-flight VM provisioning requests to complete before process exit |
+| **Fiber `recover` middleware** | Prevents a single panicking goroutine from crashing the entire API process |
