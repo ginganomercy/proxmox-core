@@ -33,6 +33,7 @@ type ProxmoxService interface {
 	WaitForTask(node, upid string) error
 	// Production-grade: Delete a VM for rollback purposes
 	DeleteVM(node, vmid string) error
+	GetClusterLogs() ([]interface{}, error)
 }
 
 type proxmoxServiceImpl struct {
@@ -55,6 +56,19 @@ func (s *proxmoxServiceImpl) fetchWithCache(cacheKey string, endpoint string, tt
 
 	proxmox.Cache.Set(cacheKey, body, ttl)
 	return body, nil
+}
+
+func (s *proxmoxServiceImpl) GetClusterLogs() ([]interface{}, error) {
+	cacheKey := "cluster_logs"
+	body, err := s.fetchWithCache(cacheKey, "/cluster/log?max=500", 5*time.Second)
+	if err != nil {
+		return nil, err
+	}
+
+	var response map[string]interface{}
+	json.Unmarshal(body, &response)
+	data, _ := response["data"].([]interface{})
+	return data, nil
 }
 
 func (s *proxmoxServiceImpl) GetNodes() ([]interface{}, error) {

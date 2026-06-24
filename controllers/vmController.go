@@ -257,7 +257,16 @@ func (ctrl *ProxmoxController) DeleteInstance(c *fiber.Ctx) error {
 		fmt.Printf("[WARN] Failed to delete VM %s from Proxmox, but will remove from DB. Err: %v\n", vmid, err)
 	}
 
-	// 2. Remove ownership record from SQLite Database
+	// 2. Query the server record first to obtain Name and UserID for order status synchronization
+	var server models.Server
+	if err := database.DB.Where("vmid = ?", vmid).First(&server).Error; err == nil {
+		// Update corresponding order status from COMPLETED to DELETED
+		database.DB.Model(&models.Order{}).
+			Where("user_id = ? AND name = ? AND status = 'COMPLETED'", server.UserID, server.Name).
+			Update("status", "DELETED")
+	}
+
+	// 3. Remove ownership record from SQLite Database
 	if err := database.DB.Where("vmid = ?", vmid).Delete(&models.Server{}).Error; err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to remove VM ownership from database"})
 	}
