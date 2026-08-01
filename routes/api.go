@@ -19,12 +19,12 @@ func RegisterRoutes(
 
 	// Public Routes
 	auth := api.Group("/auth")
-	auth.Post("/register", authCtrl.Register)
+	// auth.Post("/register", authCtrl.Register) // Disabled: No self-service registration in personal admin dashboard
 	auth.Post("/login", authCtrl.Login)
-	auth.Post("/forgot-password", authCtrl.ForgotPassword)
-	auth.Post("/reset-password", authCtrl.ResetPassword)
-	auth.Get("/google", ssoCtrl.GoogleLogin)
-	auth.Get("/google/callback", ssoCtrl.GoogleCallback)
+	// auth.Post("/forgot-password", authCtrl.ForgotPassword) // Disabled: No self-service password reset
+	// auth.Post("/reset-password", authCtrl.ResetPassword) // Disabled
+	// auth.Get("/google", ssoCtrl.GoogleLogin) // Disabled: Google SSO disabled
+	// auth.Get("/google/callback", ssoCtrl.GoogleCallback) // Disabled
 
 	// Protected Routes
 	protected := api.Group("/", middleware.Protected())
