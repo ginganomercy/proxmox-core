@@ -12,7 +12,6 @@ type User struct {
 	Username     string    `gorm:"uniqueIndex;not null" json:"username"`
 	PasswordHash string    `gorm:"not null" json:"-"`
 	Role             string     `gorm:"default:'CLIENT'" json:"role"`
-	Balance          float64    `gorm:"default:0.0" json:"balance"`
 	ResetToken       *string    `gorm:"type:varchar(255);index" json:"-"`
 	ResetTokenExpiry *time.Time `json:"-"`
 	Servers          []Server   `gorm:"foreignKey:UserID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"servers"`
@@ -43,7 +42,6 @@ type Order struct {
 	Ciuser         string    `json:"ciuser"`
 	Cipassword     string    `json:"cipassword"`
 	Ipconfig0      string    `json:"ipconfig0"`
-	TotalCost      float64   `json:"totalCost"`
 	// Status flow: PENDING → READY_TO_ACTIVATE → PROVISIONING → COMPLETED | FAILED
 	Status         string    `gorm:"default:'PENDING'" json:"status"`
 	ActivationCode string    `gorm:"type:varchar(10)" json:"activationCode"`

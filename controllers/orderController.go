@@ -63,9 +63,6 @@ func (ctrl *OrderController) CreateOrder(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Anda telah mencapai batas maksimal 1 Server Virtual per akun."})
 	}
 
-	// Calculate cost
-	totalCost := float64(req.Cores*10000 + req.Memory*10 + req.Storage*5000)
-
 	order := models.Order{
 		UserID:     userID,
 		UserEmail:  req.UserEmail,
@@ -78,7 +75,6 @@ func (ctrl *OrderController) CreateOrder(c *fiber.Ctx) error {
 		Cipassword: req.Cipassword,
 		// Ipconfig0 will be auto-generated during provisioning based on VMID
 		Ipconfig0:  "",
-		TotalCost:  totalCost,
 		Status:     "PENDING",
 	}
 
@@ -93,7 +89,7 @@ func (ctrl *OrderController) CreateOrder(c *fiber.Ctx) error {
 	}
 
 	go func() {
-		if err := ctrl.emailService.SendOrderInvoice(order.UserEmail, username, order.Name, order.Cores, order.Memory, order.Storage, order.TotalCost); err != nil {
+		if err := ctrl.emailService.SendOrderInvoice(order.UserEmail, username, order.Name, order.Cores, order.Memory, order.Storage); err != nil {
 			log.Printf("[ERROR] Failed to send order invoice email to %s: %v", order.UserEmail, err)
 		}
 	}()

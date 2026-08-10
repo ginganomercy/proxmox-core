@@ -10,7 +10,7 @@ type UserRepository interface {
 	Create(user *models.User) error
 	FindByUsername(username string) (*models.User, error)
 	FindByID(id string) (*models.User, error)
-	UpdateBalance(id string, addAmount float64) error
+
 
 	FindByResetToken(token string) (*models.User, error)
 	Update(user *models.User) error
@@ -50,9 +50,7 @@ func (r *userRepositoryImpl) FindByID(id string) (*models.User, error) {
 	return &user, nil
 }
 
-func (r *userRepositoryImpl) UpdateBalance(id string, addAmount float64) error {
-	return r.db.Model(&models.User{}).Where("id = ?", id).Update("balance", gorm.Expr("balance + ?", addAmount)).Error
-}
+
 
 
 

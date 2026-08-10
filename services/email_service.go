@@ -10,7 +10,7 @@ import (
 type EmailService interface {
 	SendActivationCode(toEmail, username, orderName, activationCode string) error
 	SendPasswordReset(toEmail, username, resetToken string) error
-	SendOrderInvoice(toEmail, username, orderName string, cores, memory, storage int, totalCost float64) error
+	SendOrderInvoice(toEmail, username, orderName string, cores, memory, storage int) error
 }
 
 type emailServiceImpl struct{}
@@ -173,7 +173,7 @@ func (s *emailServiceImpl) SendPasswordReset(toEmail, username, resetToken strin
 	return err
 }
 
-func (s *emailServiceImpl) SendOrderInvoice(toEmail, username, orderName string, cores, memory, storage int, totalCost float64) error {
+func (s *emailServiceImpl) SendOrderInvoice(toEmail, username, orderName string, cores, memory, storage int) error {
 	host := config.Env.SMTPHost
 	port := config.Env.SMTPPort
 	user := config.Env.SMTPUser
@@ -182,14 +182,14 @@ func (s *emailServiceImpl) SendOrderInvoice(toEmail, username, orderName string,
 	if user == "" || pass == "" {
 		fmt.Printf("===================================================\n")
 		fmt.Printf("[MOCK EMAIL INVOICE] To: %s\n", toEmail)
-		fmt.Printf("[MOCK EMAIL INVOICE] VM Name: %s, Total: Rp %.0f\n", orderName, totalCost)
+		fmt.Printf("[MOCK EMAIL INVOICE] VM Name: %s\n", orderName)
 		fmt.Printf("===================================================\n")
 		return nil
 	}
 
 	auth := smtp.PlainAuth("", user, pass, host)
 
-	subject := "Invoice Pesanan VM: " + orderName
+	subject := "Permintaan VM: " + orderName
 
 	memoryStr := fmt.Sprintf("%d MB", memory)
 	if memory >= 1024 {
@@ -223,11 +223,11 @@ func (s *emailServiceImpl) SendOrderInvoice(toEmail, username, orderName string,
 		<div class="container">
 			<div class="header">
 				<h1>Cloud Baja Tegal</h1>
-				<p style="margin: 5px 0 0 0; opacity: 0.9;">Tagihan Pesanan Virtual Machine</p>
+				<p style="margin: 5px 0 0 0; opacity: 0.9;">Permintaan Virtual Machine</p>
 			</div>
 			<div class="content">
 				<p>Halo <strong>%s</strong>,</p>
-				<p>Terima kasih telah melakukan pemesanan server VPS di Cloud Baja Tegal. Pesanan Anda telah kami terima dan saat ini berstatus <strong>PENDING</strong> (Menunggu Pembayaran).</p>
+				<p>Terima kasih telah melakukan pemesanan server VPS di Cloud Baja Tegal. Pesanan Anda telah kami terima dan saat ini berstatus <strong>PENDING</strong> (Menunggu Persetujuan Admin).</p>
 				
 				<div class="table-container">
 					<table>
@@ -235,17 +235,10 @@ func (s *emailServiceImpl) SendOrderInvoice(toEmail, username, orderName string,
 						<tr><td class="label">CPU Cores</td><td class="value">%d Cores</td></tr>
 						<tr><td class="label">RAM (Memory)</td><td class="value">%s</td></tr>
 						<tr><td class="label">Storage (NVMe)</td><td class="value">%d GB</td></tr>
-						<tr class="total-row">
-							<td class="label">Total Pembayaran</td>
-							<td class="value">Rp %.0f</td>
-						</tr>
 					</table>
 				</div>
 
-				<p style="font-size: 13px; color: #64748b;">* Biaya di atas adalah sistem sekali bayar (One-Time Payment) untuk selamanya.</p>
-				<p>Untuk menyelesaikan pesanan dan mendapatkan <strong>Kode Aktivasi VM</strong> Anda, silakan lakukan konfirmasi pembayaran dengan menghubungi Admin melalui WhatsApp.</p>
-				
-				<a href="https://wa.me/62856117933?text=Halo%%20Admin%%20CBT,%%20saya%%20ingin%%20konfirmasi%%20pembayaran%%20untuk%%20pesanan%%20VM:%%20%s%%20dengan%%20email%%20%s" class="btn">Konfirmasi Pembayaran via WhatsApp</a>
+				<p>Untuk memproses pesanan dan mendapatkan <strong>Kode Aktivasi VM</strong> Anda, silakan konfirmasi ke Administrator.</p>
 			</div>
 			<div class="footer">
 				&copy; 2026 Cloud Baja Tegal. All rights reserved.<br>
@@ -254,7 +247,7 @@ func (s *emailServiceImpl) SendOrderInvoice(toEmail, username, orderName string,
 		</div>
 	</body>
 	</html>
-	`, username, orderName, cores, memoryStr, storage, totalCost, orderName, toEmail)
+	`, username, orderName, cores, memoryStr, storage)
 
 	headers := make(map[string]string)
 	headers["From"] = user

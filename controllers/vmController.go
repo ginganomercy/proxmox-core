@@ -159,18 +159,7 @@ func (ctrl *ProxmoxController) CreateVM(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "invalid node format"})
 	}
 
-	// Cost calculation:
-	// Cores: 10000/core, RAM: 10/MB, Storage: 5000/GB
-	cost := float64(req.Cores*10000 + req.Memory*10 + req.Storage*5000)
 
-	var user models.User
-	if err := database.DB.Where("id = ?", userId).First(&user).Error; err != nil {
-		return c.Status(404).JSON(fiber.Map{"error": "user not found"})
-	}
-
-	if user.Balance < cost {
-		return c.Status(400).JSON(fiber.Map{"error": "insufficient balance. Please redeem a voucher."})
-	}
 
 	// ── Step 1: Get guaranteed-unique VMID from Proxmox cluster ──────────────
 	// Replaces unsafe math/rand that could collide with existing VMs.
@@ -210,9 +199,8 @@ func (ctrl *ProxmoxController) CreateVM(c *fiber.Ctx) error {
 	}
 	_ = ctrl.proxmoxService.UpdateVMConfig(req.Node, "qemu", newVmid, ciConfig)
 
-	// ── Step 6: Deduct Balance and Create Ownership Record in a transaction ───
+	// ── Step 6: Create Ownership Record in a transaction ───
 	database.DB.Transaction(func(tx *gorm.DB) error {
-		tx.Model(&user).Update("balance", gorm.Expr("balance - ?", cost))
 
 		server := models.Server{
 			VMID:   newVmidInt,
@@ -229,7 +217,6 @@ func (ctrl *ProxmoxController) CreateVM(c *fiber.Ctx) error {
 		"status":  "success",
 		"message": "VM Provisioning started successfully",
 		"vmid":    newVmidInt,
-		"cost":    cost,
 	})
 }
 

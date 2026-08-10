@@ -67,7 +67,7 @@ func (s *authServiceImpl) Register(username, password string) error {
 		Username:     username,
 		PasswordHash: string(hash),
 		Role:         "USER", // Default role for new signups
-		Balance:      0.0,
+
 	}
 
 	return s.userRepo.Create(&user)
@@ -167,7 +167,7 @@ func (s *authServiceImpl) LoginWithGoogle(email string) (string, error) {
 			Username:     email,
 			PasswordHash: string(hash),
 			Role:         "USER",
-			Balance:      0.0,
+
 		}
 		
 		if err := s.userRepo.Create(user); err != nil {
