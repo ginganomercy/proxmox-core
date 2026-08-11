@@ -32,17 +32,10 @@ func RegisterRoutes(
 	// Auth verification
 	protected.Get("/auth/me", authCtrl.Me)
 
-	// Order Routes
-	orders := protected.Group("/orders")
-	orders.Post("/", orderCtrl.CreateOrder)
-	orders.Get("/me", orderCtrl.GetMyOrders)
-	orders.Post("/:id/activate", orderCtrl.ActivateOrder)
-	orders.Delete("/:id", orderCtrl.DeleteOrder)
-	
 	// Admin Order Routes
-	adminOrders := protected.Group("/admin/orders", middleware.AdminOnly())
-	adminOrders.Get("/", orderCtrl.GetAllOrders)
-	adminOrders.Post("/:id/generate", orderCtrl.GenerateCode)
+	adminOrders := protected.Group("/orders", middleware.AdminOnly())
+	adminOrders.Post("/", orderCtrl.CreateOrder)
+	adminOrders.Get("/all", orderCtrl.GetAllOrders)
 
 	// Admin Summary Route
 	protected.Get("/admin/summary", middleware.AdminOnly(), adminCtrl.GetDashboardSummary)

@@ -75,7 +75,7 @@ func (ctrl *OrderController) CreateOrder(c *fiber.Ctx) error {
 		Cipassword: req.Cipassword,
 		// Ipconfig0 will be auto-generated during provisioning based on VMID
 		Ipconfig0:  "",
-		Status:     "PENDING",
+		Status:     "PROVISIONING",
 	}
 
 	if err := ctrl.orderRepo.Create(&order); err != nil {
@@ -88,13 +88,22 @@ func (ctrl *OrderController) CreateOrder(c *fiber.Ctx) error {
 		username = user.Username
 	}
 
+	// Launch the provisioning pipeline immediately
+	orderSnapshot := order
 	go func() {
-		if err := ctrl.emailService.SendOrderInvoice(order.UserEmail, username, order.Name, order.Cores, order.Memory, order.Storage); err != nil {
-			log.Printf("[ERROR] Failed to send order invoice email to %s: %v", order.UserEmail, err)
+		ctrl.runProvisioningPipeline(orderSnapshot, userID)
+	}()
+
+	go func() {
+		if err := ctrl.emailService.SendVMProvisioningNotification(order.UserEmail, username, order.Name, order.Cores, order.Memory, order.Storage); err != nil {
+			log.Printf("[ERROR] Failed to send notification email to %s: %v", order.UserEmail, err)
 		}
 	}()
 
-	return c.Status(fiber.StatusCreated).JSON(order)
+	return c.Status(fiber.StatusAccepted).JSON(fiber.Map{
+		"message": "VM provisioning started.",
+		"orderId": order.ID,
+	})
 }
 
 func (ctrl *OrderController) reconcileOrdersWithProxmox(orders []models.Order) []models.Order {
@@ -184,107 +193,7 @@ func (ctrl *OrderController) DeleteOrder(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"message": "Order deleted successfully"})
 }
 
-func (ctrl *OrderController) GenerateCode(c *fiber.Ctx) error {
-	orderID := c.Params("id")
-	order, err := ctrl.orderRepo.FindByID(orderID)
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Order not found"})
-	}
 
-	if order.Status != "PENDING" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Order is not PENDING"})
-	}
-
-	// Get user info for the email (Toleran terhadap error misal user sudah terhapus)
-	user, _ := ctrl.userRepo.FindByID(order.UserID)
-	username := "Customer"
-	if user != nil && user.Username != "" {
-		username = user.Username
-	}
-
-	// Generate 6-char random code using cryptographically secure source
-	code := generateRandomCode(6)
-	order.ActivationCode = code
-	order.Status = "READY_TO_ACTIVATE"
-
-	if err := ctrl.orderRepo.Update(order); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update order"})
-	}
-
-	// Send Email asynchronously — fire-and-forget with structured error log
-	go func() {
-		if err := ctrl.emailService.SendActivationCode(order.UserEmail, username, order.Name, code); err != nil {
-			log.Printf("[ERROR] Failed to send activation email to %s: %v", order.UserEmail, err)
-		}
-	}()
-
-	return c.JSON(fiber.Map{"message": "Code generated and email queued", "code": code})
-}
-
-type ActivateRequest struct {
-	Code string `json:"code"`
-}
-
-// ActivateOrder is the VM provisioning entry point.
-// It validates the request synchronously (fast) then IMMEDIATELY returns HTTP 202 Accepted.
-// All heavy Proxmox work (Clone → WaitForTask → Resize → CloudInit → PowerOn)
-// runs in a background goroutine. The frontend must poll GET /orders/me to track
-// the status transition: READY_TO_ACTIVATE → PROVISIONING → COMPLETED | FAILED.
-//
-// Why async? The full pipeline can take 2-5 minutes, far exceeding any reverse proxy
-// (Traefik/Nginx) timeout or browser keepalive window.
-func (ctrl *OrderController) ActivateOrder(c *fiber.Ctx) error {
-	orderID := c.Params("id")
-	userID := c.Locals("userId").(string)
-
-	var req ActivateRequest
-	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid payload"})
-	}
-
-	order, err := ctrl.orderRepo.FindByID(orderID)
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Order not found"})
-	}
-
-	// Authorization: ensure the requesting user owns this order
-	if order.UserID != userID {
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "You do not own this order"})
-	}
-
-	if order.Status == "PROVISIONING" {
-		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "VM provisioning is already in progress. Please wait."})
-	}
-
-	if order.Status != "READY_TO_ACTIVATE" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Order is not ready or already activated"})
-	}
-
-	if order.ActivationCode != req.Code {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid activation code"})
-	}
-
-	// ── Mark as PROVISIONING immediately so frontend/admin can track state ──────
-	order.Status = "PROVISIONING"
-	order.ProvisionError = ""
-	if err := ctrl.orderRepo.Update(order); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to start provisioning"})
-	}
-
-	// ── Launch the long-running pipeline in the background ──────────────────────
-	// MUST NOT reference fiber.Ctx after this point (context will be freed).
-	// Capture all needed values by value before the goroutine.
-	orderSnapshot := *order // copy to avoid data race
-	go func() {
-		ctrl.runProvisioningPipeline(orderSnapshot, userID)
-	}()
-
-	// ── Return 202 Accepted immediately — client must poll /orders/me ────────────
-	return c.Status(fiber.StatusAccepted).JSON(fiber.Map{
-		"message": "VM provisioning started. Poll GET /orders/me for status updates.",
-		"orderId": orderID,
-	})
-}
 
 // runProvisioningPipeline is the background worker for VM provisioning.
 // It updates the order status to COMPLETED or FAILED with a descriptive error.

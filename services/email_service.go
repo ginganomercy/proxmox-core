@@ -8,9 +8,8 @@ import (
 )
 
 type EmailService interface {
-	SendActivationCode(toEmail, username, orderName, activationCode string) error
 	SendPasswordReset(toEmail, username, resetToken string) error
-	SendOrderInvoice(toEmail, username, orderName string, cores, memory, storage int) error
+	SendVMProvisioningNotification(toEmail, username, orderName string, cores, memory, storage int) error
 }
 
 type emailServiceImpl struct{}
@@ -19,82 +18,7 @@ func NewEmailService() EmailService {
 	return &emailServiceImpl{}
 }
 
-func (s *emailServiceImpl) SendActivationCode(toEmail, username, orderName, activationCode string) error {
-	host := config.Env.SMTPHost
-	port := config.Env.SMTPPort
-	user := config.Env.SMTPUser
-	pass := config.Env.SMTPPass
 
-	// If no SMTP configured, we just log it and simulate success
-	if user == "" || pass == "" {
-		fmt.Printf("===================================================\n")
-		fmt.Printf("[MOCK EMAIL] To: %s\n", toEmail)
-		fmt.Printf("[MOCK EMAIL] Activation Code for %s: %s\n", orderName, activationCode)
-		fmt.Printf("===================================================\n")
-		return nil
-	}
-
-	auth := smtp.PlainAuth("", user, pass, host)
-
-	htmlBody := fmt.Sprintf(`
-	<!DOCTYPE html>
-	<html>
-	<head>
-		<meta charset="UTF-8">
-		<style>
-			body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8fafc; margin: 0; padding: 20px; color: #334155; }
-			.container { max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
-			.header { background: linear-gradient(135deg, #4f46e5 0%%, #3b82f6 100%%); color: white; padding: 30px 20px; text-align: center; }
-			.header h1 { margin: 0; font-size: 24px; font-weight: 800; }
-			.content { padding: 30px 20px; }
-			.content p { line-height: 1.6; margin-bottom: 20px; }
-			.code-box { background-color: #eef2ff; border: 2px dashed #6366f1; border-radius: 12px; padding: 20px; text-align: center; margin: 30px 0; }
-			.code { font-size: 32px; font-weight: 900; color: #4f46e5; letter-spacing: 4px; font-family: monospace; }
-			.footer { background-color: #f8fafc; padding: 20px; text-align: center; font-size: 12px; color: #94a3b8; border-top: 1px solid #e2e8f0; }
-		</style>
-	</head>
-	<body>
-		<div class="container">
-			<div class="header">
-				<h1>Cloud Baja Tegal</h1>
-				<p style="margin: 5px 0 0 0; opacity: 0.9;">Aktivasi Virtual Machine</p>
-			</div>
-			<div class="content">
-				<p>Halo <strong>%s</strong>,</p>
-				<p>Pembayaran Anda untuk pesanan <strong>%s</strong> telah kami konfirmasi! VM Anda kini siap untuk dihidupkan (Provisioning).</p>
-				<p>Silakan salin 6-digit Kode Aktivasi di bawah ini dan masukkan ke dalam Dashboard CBT Anda:</p>
-				
-				<div class="code-box">
-					<div class="code">%s</div>
-				</div>
-
-				<p>Terima kasih telah mempercayakan infrastruktur cloud Anda kepada Cloud Baja Tegal.</p>
-			</div>
-			<div class="footer">
-				&copy; 2026 Cloud Baja Tegal. All rights reserved.<br>
-				Pesan ini dibuat otomatis oleh sistem.
-			</div>
-		</div>
-	</body>
-	</html>
-	`, username, orderName, activationCode)
-
-	headers := make(map[string]string)
-	headers["From"] = user
-	headers["To"] = toEmail
-	headers["Subject"] = "Kode Aktivasi VM: " + orderName
-	headers["MIME-Version"] = "1.0"
-	headers["Content-Type"] = "text/html; charset=\"UTF-8\""
-
-	message := ""
-	for k, v := range headers {
-		message += fmt.Sprintf("%s: %s\r\n", k, v)
-	}
-	message += "\r\n" + htmlBody
-
-	err := smtp.SendMail(host+":"+port, auth, user, []string{toEmail}, []byte(message))
-	return err
-}
 
 func (s *emailServiceImpl) SendPasswordReset(toEmail, username, resetToken string) error {
 	host := config.Env.SMTPHost
@@ -173,7 +97,7 @@ func (s *emailServiceImpl) SendPasswordReset(toEmail, username, resetToken strin
 	return err
 }
 
-func (s *emailServiceImpl) SendOrderInvoice(toEmail, username, orderName string, cores, memory, storage int) error {
+func (s *emailServiceImpl) SendVMProvisioningNotification(toEmail, username, orderName string, cores, memory, storage int) error {
 	host := config.Env.SMTPHost
 	port := config.Env.SMTPPort
 	user := config.Env.SMTPUser
@@ -181,15 +105,15 @@ func (s *emailServiceImpl) SendOrderInvoice(toEmail, username, orderName string,
 
 	if user == "" || pass == "" {
 		fmt.Printf("===================================================\n")
-		fmt.Printf("[MOCK EMAIL INVOICE] To: %s\n", toEmail)
-		fmt.Printf("[MOCK EMAIL INVOICE] VM Name: %s\n", orderName)
+		fmt.Printf("[MOCK EMAIL NOTIFICATION] To: %s\n", toEmail)
+		fmt.Printf("[MOCK EMAIL NOTIFICATION] VM Name: %s\n", orderName)
 		fmt.Printf("===================================================\n")
 		return nil
 	}
 
 	auth := smtp.PlainAuth("", user, pass, host)
 
-	subject := "Permintaan VM: " + orderName
+	subject := "Pemberitahuan: VM Anda sedang dibuat (" + orderName + ")"
 
 	memoryStr := fmt.Sprintf("%d MB", memory)
 	if memory >= 1024 {
@@ -204,7 +128,7 @@ func (s *emailServiceImpl) SendOrderInvoice(toEmail, username, orderName string,
 		<style>
 			body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8fafc; margin: 0; padding: 20px; color: #334155; }
 			.container { max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
-			.header { background: linear-gradient(135deg, #4f46e5 0%%, #3b82f6 100%%); color: white; padding: 30px 20px; text-align: center; }
+			.header { background: linear-gradient(135deg, #10b981 0%%, #059669 100%%); color: white; padding: 30px 20px; text-align: center; }
 			.header h1 { margin: 0; font-size: 24px; font-weight: 800; }
 			.content { padding: 30px 20px; }
 			.content p { line-height: 1.6; margin-bottom: 20px; }
@@ -213,9 +137,6 @@ func (s *emailServiceImpl) SendOrderInvoice(toEmail, username, orderName string,
 			td { padding: 8px 0; font-size: 14px; }
 			.label { font-weight: 600; color: #64748b; width: 40%%; }
 			.value { font-weight: 700; color: #0f172a; text-align: right; }
-			.total-row td { border-top: 2px dashed #cbd5e1; padding-top: 16px; margin-top: 8px; font-size: 16px; }
-			.total-row .value { color: #4f46e5; font-size: 20px; }
-			.btn { display: inline-block; background-color: #25D366; color: white; text-decoration: none; font-weight: bold; padding: 14px 24px; border-radius: 12px; margin-top: 10px; width: 100%%; box-sizing: border-box; text-align: center; }
 			.footer { background-color: #f8fafc; padding: 20px; text-align: center; font-size: 12px; color: #94a3b8; border-top: 1px solid #e2e8f0; }
 		</style>
 	</head>
@@ -223,11 +144,11 @@ func (s *emailServiceImpl) SendOrderInvoice(toEmail, username, orderName string,
 		<div class="container">
 			<div class="header">
 				<h1>Cloud Baja Tegal</h1>
-				<p style="margin: 5px 0 0 0; opacity: 0.9;">Permintaan Virtual Machine</p>
+				<p style="margin: 5px 0 0 0; opacity: 0.9;">Pemberitahuan Pembuatan Virtual Machine</p>
 			</div>
 			<div class="content">
 				<p>Halo <strong>%s</strong>,</p>
-				<p>Terima kasih telah melakukan pemesanan server VPS di Cloud Baja Tegal. Pesanan Anda telah kami terima dan saat ini berstatus <strong>PENDING</strong> (Menunggu Persetujuan Admin).</p>
+				<p>Administrator telah memulai proses pembuatan Virtual Machine Anda. VM Anda saat ini sedang dalam tahap <strong>PROVISIONING</strong> dan akan segera beroperasi.</p>
 				
 				<div class="table-container">
 					<table>
@@ -238,7 +159,7 @@ func (s *emailServiceImpl) SendOrderInvoice(toEmail, username, orderName string,
 					</table>
 				</div>
 
-				<p>Untuk memproses pesanan dan mendapatkan <strong>Kode Aktivasi VM</strong> Anda, silakan konfirmasi ke Administrator.</p>
+				<p>Silakan pantau status VM Anda secara berkala melalui Dashboard. Tidak ada tindakan lebih lanjut yang perlu Anda lakukan.</p>
 			</div>
 			<div class="footer">
 				&copy; 2026 Cloud Baja Tegal. All rights reserved.<br>
