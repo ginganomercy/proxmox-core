@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"cbt-core-api/config"
-	"cbt-core-api/services"
+	"cbt-core-api/pkg/config"
+	"cbt-core-api/internal/services"
 
 	"github.com/gofiber/fiber/v2"
 	"golang.org/x/oauth2"

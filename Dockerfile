@@ -12,7 +12,7 @@ RUN go mod download
 
 # Copy source code and build
 COPY . .
-RUN CGO_ENABLED=1 GOOS=linux go build -o core-api .
+RUN CGO_ENABLED=1 GOOS=linux go build -o core-api ./cmd/api
 
 # Production Stage
 FROM alpine:latest

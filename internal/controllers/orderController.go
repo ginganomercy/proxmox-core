@@ -8,9 +8,9 @@ import (
 	"strconv"
 
 	"cbt-core-api/database"
-	"cbt-core-api/models"
-	"cbt-core-api/repositories"
-	"cbt-core-api/services"
+	"cbt-core-api/internal/models"
+	"cbt-core-api/internal/repositories"
+	"cbt-core-api/internal/services"
 
 	"github.com/gofiber/fiber/v2"
 )

@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"cbt-core-api/database"
-	"cbt-core-api/models"
-	"cbt-core-api/services"
+	"cbt-core-api/internal/models"
+	"cbt-core-api/internal/services"
 )
 
 type MonitorWorker struct {

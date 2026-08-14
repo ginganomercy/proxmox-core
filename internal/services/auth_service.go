@@ -4,9 +4,9 @@ import (
 	"errors"
 	"time"
 
-	"cbt-core-api/config"
-	"cbt-core-api/models"
-	"cbt-core-api/repositories"
+	"cbt-core-api/pkg/config"
+	"cbt-core-api/internal/models"
+	"cbt-core-api/internal/repositories"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"

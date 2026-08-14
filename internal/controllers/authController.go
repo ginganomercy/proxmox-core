@@ -1,7 +1,7 @@
 package controllers
 
 import (
-	"cbt-core-api/services"
+	"cbt-core-api/internal/services"
 
 	"github.com/gofiber/fiber/v2"
 )

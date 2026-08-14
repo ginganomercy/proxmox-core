@@ -10,7 +10,7 @@ import (
 	"net/http"
 	"time"
 
-	"cbt-core-api/config"
+	"cbt-core-api/pkg/config"
 )
 
 // ProxmoxClient defines the interface for Proxmox API calls

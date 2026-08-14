@@ -2,8 +2,8 @@ package controllers
 
 import (
 	"cbt-core-api/database"
-	"cbt-core-api/models"
-	"cbt-core-api/utils"
+	"cbt-core-api/internal/models"
+	"cbt-core-api/pkg/utils"
 	"fmt"
 	"strconv"
 

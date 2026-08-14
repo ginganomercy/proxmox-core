@@ -3,7 +3,7 @@ package middleware
 import (
 	"strings"
 
-	"cbt-core-api/config"
+	"cbt-core-api/pkg/config"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"

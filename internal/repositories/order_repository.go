@@ -1,7 +1,7 @@
 package repositories
 
 import (
-	"cbt-core-api/models"
+	"cbt-core-api/internal/models"
 
 	"gorm.io/gorm"
 )

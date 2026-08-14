@@ -2,14 +2,16 @@ package controllers
 
 import (
 	"cbt-core-api/database"
-	"cbt-core-api/models"
-	"cbt-core-api/services"
-	"cbt-core-api/utils"
+	"cbt-core-api/internal/models"
+	"cbt-core-api/internal/services"
+	"cbt-core-api/pkg/utils"
 	"strconv"
 
 	"github.com/gofiber/fiber/v2"
 )
 
+// ProxmoxController handles HTTP requests related to Proxmox VE clustering and instance management.
+// It bridges the Fiber HTTP routing with the ProxmoxService domain logic.
 type ProxmoxController struct {
 	proxmoxService services.ProxmoxService
 }

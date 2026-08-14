@@ -4,7 +4,7 @@ import (
 	"log"
 	"os"
 
-	"cbt-core-api/models"
+	"cbt-core-api/internal/models"
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"

@@ -1,8 +1,8 @@
 package routes
 
 import (
-	"cbt-core-api/controllers"
-	"cbt-core-api/middleware"
+	"cbt-core-api/internal/controllers"
+	"cbt-core-api/internal/middleware"
 
 	"github.com/gofiber/fiber/v2"
 )

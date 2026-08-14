@@ -3,7 +3,7 @@ package controllers
 import (
 	"time"
 	"cbt-core-api/database"
-	"cbt-core-api/models"
+	"cbt-core-api/internal/models"
 	"github.com/gofiber/fiber/v2"
 )
 

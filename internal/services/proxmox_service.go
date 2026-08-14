@@ -9,9 +9,11 @@ import (
 	"sync"
 	"time"
 
-	"cbt-core-api/proxmox"
+	"cbt-core-api/pkg/proxmox"
 )
 
+// ProxmoxService defines the contract for interacting with the underlying Proxmox VE REST API.
+// It abstracts away raw HTTP calls and provides domain-specific methods for cluster and VM management.
 type ProxmoxService interface {
 	GetNodes() ([]interface{}, error)
 	GetNodeStatus(node string) (map[string]interface{}, error)

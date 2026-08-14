@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net/smtp"
 
-	"cbt-core-api/config"
+	"cbt-core-api/pkg/config"
 )
 
 type EmailService interface {
