@@ -15,6 +15,7 @@ import (
 	"cbt-core-api/repositories"
 	"cbt-core-api/routes"
 	"cbt-core-api/services"
+	"cbt-core-api/workers"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
@@ -29,6 +30,9 @@ func main() {
 	// Initialize Database and Cache
 	database.ConnectDB()
 	proxmox.InitCache()
+
+	// Seed Uptime Monitor Targets
+	workers.InjectInitialTargets()
 
 	// Initialize Fiber app
 	// ReadTimeout and WriteTimeout MUST be longer than the slowest possible request.
@@ -75,9 +79,15 @@ func main() {
 	orderRepo := repositories.NewOrderRepository(database.DB)
 	orderCtrl := controllers.NewOrderController(orderRepo, userRepo, emailService, proxmoxService)
 	adminCtrl := controllers.NewAdminController()
+	monitorCtrl := controllers.NewMonitorController()
 
 	// Register Routes
-	routes.RegisterRoutes(app, authCtrl, ssoCtrl, proxmoxCtrl, orderCtrl, adminCtrl)
+	routes.RegisterRoutes(app, authCtrl, ssoCtrl, proxmoxCtrl, orderCtrl, adminCtrl, monitorCtrl)
+
+	// Start Uptime Monitor Worker
+	monitorWorker := workers.NewMonitorWorker()
+	// Using a background context for the worker; it will run indefinitely until the process dies or is stopped
+	go monitorWorker.Start(context.Background())
 
 	// Start server in a separate goroutine
 	port := config.Env.Port

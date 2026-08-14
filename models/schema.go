@@ -71,3 +71,35 @@ func (o *Order) BeforeCreate(tx *gorm.DB) (err error) {
 	}
 	return
 }
+
+type MonitorTarget struct {
+	ID        string    `gorm:"primaryKey;type:varchar(36)" json:"id"`
+	Domain    string    `gorm:"uniqueIndex;not null" json:"domain"` // e.g., "https://finger.pbjt.web.id"
+	Status    string    `gorm:"default:'PENDING'" json:"status"`    // UP, DOWN, PENDING
+	LastPing  time.Time `json:"lastPing"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+type MonitorLog struct {
+	ID              string    `gorm:"primaryKey;type:varchar(36)" json:"id"`
+	MonitorTargetID string    `gorm:"type:varchar(36);not null;index" json:"monitorTargetId"`
+	Status          string    `json:"status"` // UP or DOWN
+	LatencyMs       int64     `json:"latencyMs"`
+	ErrorReason     string    `gorm:"type:text" json:"errorReason,omitempty"`
+	CreatedAt       time.Time `json:"createdAt"`
+}
+
+func (m *MonitorTarget) BeforeCreate(tx *gorm.DB) (err error) {
+	if m.ID == "" {
+		m.ID = uuid.NewString()
+	}
+	return
+}
+
+func (l *MonitorLog) BeforeCreate(tx *gorm.DB) (err error) {
+	if l.ID == "" {
+		l.ID = uuid.NewString()
+	}
+	return
+}

@@ -14,6 +14,7 @@ func RegisterRoutes(
 	proxmoxCtrl *controllers.ProxmoxController,
 	orderCtrl *controllers.OrderController,
 	adminCtrl *controllers.AdminController,
+	monitorCtrl *controllers.MonitorController,
 ) {
 	api := app.Group("/api")
 
@@ -39,6 +40,11 @@ func RegisterRoutes(
 
 	// Admin Summary Route
 	protected.Get("/admin/summary", middleware.AdminOnly(), adminCtrl.GetDashboardSummary)
+
+	// Uptime Monitors
+	monitors := protected.Group("/monitors", middleware.AdminOnly())
+	monitors.Get("/", monitorCtrl.GetMonitors)
+	monitors.Get("/:id/logs", monitorCtrl.GetMonitorLogs)
 
 	// Proxmox Nodes & Instances
 	proxmox := protected.Group("/proxmox")
