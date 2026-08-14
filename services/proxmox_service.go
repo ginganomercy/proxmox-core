@@ -140,6 +140,34 @@ func (s *proxmoxServiceImpl) GetNodeStatus(node string) (map[string]interface{},
 	var response map[string]interface{}
 	json.Unmarshal(body, &response)
 	data, _ := response["data"].(map[string]interface{})
+
+	// Fetch storage pool info for real node capacity
+	storageCacheKey := fmt.Sprintf("nodestorage_%s", node)
+	storageBody, err := s.fetchWithCache(storageCacheKey, fmt.Sprintf("/nodes/%s/storage", node), 10*time.Second)
+	if err == nil {
+		var storageResp map[string]interface{}
+		if json.Unmarshal(storageBody, &storageResp) == nil {
+			if storages, ok := storageResp["data"].([]interface{}); ok {
+				var totalStorage float64 = 0
+				var usedStorage float64 = 0
+				for _, storeRaw := range storages {
+					if store, ok := storeRaw.(map[string]interface{}); ok {
+						if active, ok := store["active"].(float64); ok && active == 1 {
+							if t, ok := store["total"].(float64); ok {
+								totalStorage += t
+							}
+							if u, ok := store["used"].(float64); ok {
+								usedStorage += u
+							}
+						}
+					}
+				}
+				data["storage_total"] = totalStorage
+				data["storage_used"] = usedStorage
+			}
+		}
+	}
+
 	return data, nil
 }
 
