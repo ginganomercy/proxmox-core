@@ -73,12 +73,15 @@ func (o *Order) BeforeCreate(tx *gorm.DB) (err error) {
 }
 
 type MonitorTarget struct {
-	ID        string    `gorm:"primaryKey;type:varchar(36)" json:"id"`
-	Domain    string    `gorm:"uniqueIndex;not null" json:"domain"` // e.g., "https://finger.pbjt.web.id"
-	Status    string    `gorm:"default:'PENDING'" json:"status"`    // UP, DOWN, PENDING
-	LastPing  time.Time `json:"lastPing"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	ID             string    `gorm:"primaryKey;type:varchar(36)" json:"id"`
+	Domain         string    `gorm:"uniqueIndex;not null" json:"domain"` // e.g., "https://finger.pbjt.web.id"
+	Status         string    `gorm:"default:'PENDING'" json:"status"`    // UP, DOWN, PENDING
+	LastStatusCode int       `gorm:"default:0" json:"lastStatusCode"`
+	SslValid       bool      `gorm:"default:false" json:"sslValid"`
+	SslExpiryDays  int       `gorm:"default:0" json:"sslExpiryDays"`
+	LastPing       time.Time `json:"lastPing"`
+	CreatedAt      time.Time `json:"createdAt"`
+	UpdatedAt      time.Time `json:"updatedAt"`
 }
 
 type MonitorLog struct {

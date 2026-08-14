@@ -99,6 +99,9 @@ func (w *MonitorWorker) checkTarget(target models.MonitorTarget) {
 
 	// 2. Update MonitorTarget (we always update LastPing and Status)
 	target.Status = result.Status
+	target.LastStatusCode = result.StatusCode
+	target.SslValid = result.SslValid
+	target.SslExpiryDays = result.SslExpiryDays
 	target.LastPing = now
 	target.UpdatedAt = now
 

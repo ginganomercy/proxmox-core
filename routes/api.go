@@ -44,6 +44,8 @@ func RegisterRoutes(
 	// Uptime Monitors
 	monitors := protected.Group("/monitors", middleware.AdminOnly())
 	monitors.Get("/", monitorCtrl.GetMonitors)
+	monitors.Post("/", monitorCtrl.AddTarget)
+	monitors.Delete("/:id", monitorCtrl.DeleteTarget)
 	monitors.Get("/:id/logs", monitorCtrl.GetMonitorLogs)
 
 	// Proxmox Nodes & Instances
