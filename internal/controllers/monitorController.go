@@ -4,6 +4,7 @@ import (
 	"time"
 	"cbt-core-api/database"
 	"cbt-core-api/internal/models"
+	"cbt-core-api/internal/services"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -80,6 +81,32 @@ func (c *MonitorController) AddTarget(ctx *fiber.Ctx) error {
 	if err := database.DB.Create(&target).Error; err != nil {
 		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to add domain"})
 	}
+
+	// Trigger immediate check in background with a slight delay
+	// This avoids overloading the system during rapid additions
+	// and prevents the PENDING state from persisting for up to 2 minutes.
+	go func(t models.MonitorTarget) {
+		time.Sleep(2 * time.Second)
+		result := services.PingURL(t.Domain)
+		now := time.Now()
+		
+		logEntry := models.MonitorLog{
+			MonitorTargetID: t.ID,
+			Status:          result.Status,
+			LatencyMs:       result.LatencyMs,
+			ErrorReason:     result.ErrorReason,
+			CreatedAt:       now,
+		}
+		database.DB.Create(&logEntry)
+
+		t.Status = result.Status
+		t.LastStatusCode = result.StatusCode
+		t.SslValid = result.SslValid
+		t.SslExpiryDays = result.SslExpiryDays
+		t.LastPing = now
+		t.UpdatedAt = now
+		database.DB.Save(&t)
+	}(target)
 
 	return ctx.JSON(target)
 }
