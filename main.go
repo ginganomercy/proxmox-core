@@ -31,9 +31,6 @@ func main() {
 	database.ConnectDB()
 	proxmox.InitCache()
 
-	// Seed Uptime Monitor Targets
-	workers.InjectInitialTargets()
-
 	// Initialize Fiber app
 	// ReadTimeout and WriteTimeout MUST be longer than the slowest possible request.
 	// VM provisioning (Clone → Wait → Resize → CloudInit → PowerOn) can take up to 5 minutes.

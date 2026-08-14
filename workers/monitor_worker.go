@@ -109,24 +109,3 @@ func (w *MonitorWorker) checkTarget(target models.MonitorTarget) {
 		log.Printf("[MonitorWorker] Error updating target %s: %v\n", target.Domain, err)
 	}
 }
-
-// InjectInitialTargets is a helper to seed the database with required domains
-func InjectInitialTargets() {
-	domains := []string{
-		"https://finger.pbjt.web.id",
-		"https://finger-be.pbjt.web.id",
-	}
-
-	for _, domain := range domains {
-		var existing models.MonitorTarget
-		if err := database.DB.Where("domain = ?", domain).First(&existing).Error; err != nil {
-			// Not found, create it
-			newTarget := models.MonitorTarget{
-				Domain: domain,
-				Status: "PENDING",
-			}
-			database.DB.Create(&newTarget)
-			log.Printf("Injected initial monitoring target: %s\n", domain)
-		}
-	}
-}
