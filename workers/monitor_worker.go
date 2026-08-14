@@ -78,23 +78,20 @@ func (w *MonitorWorker) checkTarget(target models.MonitorTarget) {
 	
 	now := time.Now()
 
-	// Strategy: Only log if status changes, OR if it's the very first check (PENDING)
-	statusChanged := target.Status != result.Status
+	// 1. ALWAYS Insert into MonitorLog to track latency over time for the APM chart
+	logEntry := models.MonitorLog{
+		MonitorTargetID: target.ID,
+		Status:          result.Status,
+		LatencyMs:       result.LatencyMs,
+		ErrorReason:     result.ErrorReason,
+		CreatedAt:       now,
+	}
+	if err := database.DB.Create(&logEntry).Error; err != nil {
+		log.Printf("[MonitorWorker] Error saving log for %s: %v\n", target.Domain, err)
+	}
 
-	if statusChanged {
+	if target.Status != result.Status {
 		log.Printf("[MonitorWorker] Target %s status changed from %s to %s\n", target.Domain, target.Status, result.Status)
-		
-		// 1. Insert into MonitorLog
-		logEntry := models.MonitorLog{
-			MonitorTargetID: target.ID,
-			Status:          result.Status,
-			LatencyMs:       result.LatencyMs,
-			ErrorReason:     result.ErrorReason,
-			CreatedAt:       now,
-		}
-		if err := database.DB.Create(&logEntry).Error; err != nil {
-			log.Printf("[MonitorWorker] Error saving log for %s: %v\n", target.Domain, err)
-		}
 	}
 
 	// 2. Update MonitorTarget (we always update LastPing and Status)
