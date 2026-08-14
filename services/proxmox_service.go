@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/url"
 	"sort"
+	"sync"
 	"time"
 
 	"cbt-core-api/proxmox"
@@ -157,6 +158,10 @@ func (s *proxmoxServiceImpl) GetInstances(node string) ([]interface{}, error) {
 	json.Unmarshal(qemuBody, &qemuResp)
 	qemus, _ := qemuResp["data"].([]interface{})
 	var instances []interface{}
+
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+
 	for _, v := range qemus {
 		if m, ok := v.(map[string]interface{}); ok {
 			// Skip templates
@@ -164,8 +169,56 @@ func (s *proxmoxServiceImpl) GetInstances(node string) ([]interface{}, error) {
 				continue
 			}
 			m["type"] = "qemu"
+			
+			// Inject into instances list first (so pointers/references are established)
 			instances = append(instances, m)
+
+			// If VM is running, fetch guest-agent fsinfo concurrently
+			status, _ := m["status"].(string)
+			if status == "running" {
+				if vmid, ok := m["vmid"].(float64); ok {
+					wg.Add(1)
+					go func(vmid float64, vmMap map[string]interface{}) {
+						defer wg.Done()
+						agentEndpoint := fmt.Sprintf("/nodes/%s/qemu/%.0f/agent/get-fsinfo", node, vmid)
+						agentBody, err := s.client.Get(agentEndpoint)
+						if err == nil {
+							var agentResp map[string]interface{}
+							if json.Unmarshal(agentBody, &agentResp) == nil {
+								if result, ok := agentResp["data"].(map[string]interface{})["result"].([]interface{}); ok {
+									var totalUsedBytes float64 = 0
+									for _, fsRaw := range result {
+										if fs, ok := fsRaw.(map[string]interface{}); ok {
+											if used, ok := fs["used-bytes"].(float64); ok {
+												totalUsedBytes += used
+											}
+										}
+									}
+									if totalUsedBytes > 0 {
+										mu.Lock()
+										vmMap["disk"] = totalUsedBytes
+										mu.Unlock()
+									}
+								}
+							}
+						}
+					}(vmid, m)
+				}
+			}
 		}
+	}
+
+	// Wait for all QEMU Guest Agent polls with 3s timeout to prevent API hangs
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		wg.Wait()
+	}()
+	select {
+	case <-done:
+		// All done
+	case <-time.After(3 * time.Second):
+		log.Printf("[WARN] QEMU Guest Agent fsinfo polling timed out on node %s", node)
 	}
 
 	lxcBody, err := s.fetchWithCache(fmt.Sprintf("lxc_%s", node), fmt.Sprintf("/nodes/%s/lxc", node), 10*time.Second)
