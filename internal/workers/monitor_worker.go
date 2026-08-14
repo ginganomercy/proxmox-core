@@ -60,6 +60,12 @@ func (w *MonitorWorker) runChecks() {
 		return
 	}
 
+	// Garbage Collection: Delete logs older than 7 days
+	threshold := time.Now().Add(-7 * 24 * time.Hour)
+	if err := database.DB.Where("created_at < ?", threshold).Delete(&models.MonitorLog{}).Error; err != nil {
+		log.Printf("[MonitorWorker] Error cleaning up old logs: %v\n", err)
+	}
+
 	log.Printf("[MonitorWorker] Running checks for %d targets...\n", len(targets))
 
 	var wg sync.WaitGroup
