@@ -22,6 +22,7 @@ func RegisterRoutes(
 	auth := api.Group("/auth")
 	// auth.Post("/register", authCtrl.Register) // Disabled: No self-service registration in personal admin dashboard
 	auth.Post("/login", authCtrl.Login)
+	auth.Post("/logout", authCtrl.Logout)
 	// auth.Post("/forgot-password", authCtrl.ForgotPassword) // Disabled: No self-service password reset
 	// auth.Post("/reset-password", authCtrl.ResetPassword) // Disabled
 	// auth.Get("/google", ssoCtrl.GoogleLogin) // Disabled: Google SSO disabled

@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"time"
 	"cbt-core-api/internal/services"
 
 	"github.com/gofiber/fiber/v2"
@@ -63,7 +64,30 @@ func (ctrl *AuthController) Login(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	return c.JSON(LoginResponse{Token: tokenString})
+	// Enterprise Hardening: Set HttpOnly Cookie to prevent XSS
+	c.Cookie(&fiber.Cookie{
+		Name:     "token",
+		Value:    tokenString,
+		Expires:  time.Now().Add(24 * time.Hour),
+		HTTPOnly: true,
+		Secure:   true, // Should be true in production (HTTPS)
+		SameSite: "Strict",
+	})
+
+	return c.JSON(LoginResponse{Token: tokenString}) // Still returning token for backward compatibility during transition
+}
+
+func (ctrl *AuthController) Logout(c *fiber.Ctx) error {
+	// Clear the HttpOnly cookie by setting its expiration to the past
+	c.Cookie(&fiber.Cookie{
+		Name:     "token",
+		Value:    "",
+		Expires:  time.Now().Add(-1 * time.Hour),
+		HTTPOnly: true,
+		Secure:   true,
+		SameSite: "Strict",
+	})
+	return c.JSON(fiber.Map{"message": "Logged out successfully"})
 }
 
 func (ctrl *AuthController) Me(c *fiber.Ctx) error {

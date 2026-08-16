@@ -19,6 +19,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 )
@@ -55,8 +56,22 @@ func main() {
 		AllowOrigins:     allowedOrigins,
 		AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
 		AllowMethods:     "GET, POST, PUT, DELETE, OPTIONS",
-		AllowCredentials: false,
+		AllowCredentials: true,
 		MaxAge:           86400, // Cache OPTIONS preflight for 24h to reduce redundant requests
+	}))
+
+	// Enterprise Hardening: Global Rate Limiter to prevent DoS & Brute Force
+	app.Use(limiter.New(limiter.Config{
+		Max:        150,             // Max 150 requests per expiration duration
+		Expiration: 1 * time.Minute, // per 1 minute
+		KeyGenerator: func(c *fiber.Ctx) string {
+			return c.IP()
+		},
+		LimitReached: func(c *fiber.Ctx) error {
+			return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{
+				"error": "Too many requests, please try again later.",
+			})
+		},
 	}))
 
 	// Initialize Dependencies (Clean Architecture)
