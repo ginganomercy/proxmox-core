@@ -90,6 +90,17 @@ func (ctrl *AuthController) Logout(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"message": "Logged out successfully"})
 }
 
+// GetVncToken allows the frontend to retrieve the JWT token temporarily to authenticate
+// the external noVNC WebSocket proxy, since the token is stored in an HttpOnly cookie and
+// cannot be read directly by JavaScript.
+func (ctrl *AuthController) GetVncToken(c *fiber.Ctx) error {
+	tokenString := c.Cookies("token")
+	if tokenString == "" {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "No token found in cookie"})
+	}
+	return c.JSON(fiber.Map{"token": tokenString})
+}
+
 func (ctrl *AuthController) Me(c *fiber.Ctx) error {
 	userID := c.Locals("userId").(string)
 

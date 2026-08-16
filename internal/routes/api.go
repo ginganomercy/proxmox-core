@@ -33,6 +33,7 @@ func RegisterRoutes(
 
 	// Auth verification
 	protected.Get("/auth/me", authCtrl.Me)
+	protected.Get("/auth/vnc-token", authCtrl.GetVncToken) // Needed for external noVNC websocket proxy
 
 	// Admin Order Routes
 	adminOrders := protected.Group("/orders", middleware.AdminOnly())
