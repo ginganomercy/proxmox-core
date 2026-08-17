@@ -71,7 +71,8 @@ func (ctrl *AuthController) Login(c *fiber.Ctx) error {
 		Expires:  time.Now().Add(24 * time.Hour),
 		HTTPOnly: true,
 		Secure:   true, // Should be true in production (HTTPS)
-		SameSite: "Strict",
+		SameSite: "None",
+		Domain:   ".pbjt.web.id", // Allow cookie sharing across subdomains
 	})
 
 	return c.JSON(LoginResponse{Token: tokenString}) // Still returning token for backward compatibility during transition
@@ -85,7 +86,8 @@ func (ctrl *AuthController) Logout(c *fiber.Ctx) error {
 		Expires:  time.Now().Add(-1 * time.Hour),
 		HTTPOnly: true,
 		Secure:   true,
-		SameSite: "Strict",
+		SameSite: "None",
+		Domain:   ".pbjt.web.id",
 	})
 	return c.JSON(fiber.Map{"message": "Logged out successfully"})
 }
