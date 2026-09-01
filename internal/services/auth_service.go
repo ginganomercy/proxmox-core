@@ -2,6 +2,8 @@ package services
 
 import (
 	"errors"
+	"strings"
+	"sync"
 	"time"
 
 	"cbt-core-api/pkg/config"
@@ -26,6 +28,7 @@ type AuthService interface {
 type authServiceImpl struct {
 	userRepo     repositories.UserRepository
 	emailService EmailService
+	adminOnce    sync.Once
 }
 
 func NewAuthService(userRepo repositories.UserRepository, emailService EmailService) AuthService {
@@ -33,24 +36,29 @@ func NewAuthService(userRepo repositories.UserRepository, emailService EmailServ
 }
 
 func (s *authServiceImpl) EnsureAdminExists() error {
-	count, err := s.userRepo.Count()
-	if err != nil {
-		return err
-	}
-	if count == 0 {
-		hash, _ := bcrypt.GenerateFromPassword([]byte(config.Env.AdminPassword), bcrypt.DefaultCost)
-		admin := models.User{
-			Username:     config.Env.AdminUsername,
-			PasswordHash: string(hash),
-			Role:         "ADMIN",
+	var err error
+	s.adminOnce.Do(func() {
+		count, e := s.userRepo.Count()
+		if e != nil {
+			err = e
+			return
 		}
-		return s.userRepo.Create(&admin)
-	}
-	return nil
+		if count == 0 {
+			hash, _ := bcrypt.GenerateFromPassword([]byte(config.Env.AdminPassword), bcrypt.DefaultCost)
+			admin := models.User{
+				Username:     config.Env.AdminUsername,
+				PasswordHash: string(hash),
+				Role:         "ADMIN",
+			}
+			err = s.userRepo.Create(&admin)
+		}
+	})
+	return err
 }
 
 func (s *authServiceImpl) Register(username, password string) error {
 	s.EnsureAdminExists()
+	username = strings.TrimSpace(username)
 
 	// Check if username already exists
 	_, err := s.userRepo.FindByUsername(username)
@@ -75,6 +83,7 @@ func (s *authServiceImpl) Register(username, password string) error {
 
 func (s *authServiceImpl) Login(username, password string) (string, error) {
 	s.EnsureAdminExists()
+	username = strings.TrimSpace(username)
 
 	user, err := s.userRepo.FindByUsername(username)
 	if err != nil {
