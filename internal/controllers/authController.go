@@ -22,6 +22,7 @@ type LoginRequest struct {
 
 type LoginResponse struct {
 	Token string `json:"token"`
+	Role  string `json:"role"`
 }
 
 type RegisterRequest struct {
@@ -56,7 +57,7 @@ func (ctrl *AuthController) Login(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
 	}
 
-	tokenString, err := ctrl.authService.Login(req.Username, req.Password)
+	tokenString, user, err := ctrl.authService.Login(req.Username, req.Password)
 	if err != nil {
 		if err.Error() == "invalid credentials" {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": err.Error()})
@@ -75,7 +76,7 @@ func (ctrl *AuthController) Login(c *fiber.Ctx) error {
 		Domain:   ".pbjt.web.id", // Allow cookie sharing across subdomains
 	})
 
-	return c.JSON(LoginResponse{Token: tokenString}) // Still returning token for backward compatibility during transition
+	return c.JSON(LoginResponse{Token: tokenString, Role: user.Role}) // Still returning token for backward compatibility during transition
 }
 
 func (ctrl *AuthController) Logout(c *fiber.Ctx) error {

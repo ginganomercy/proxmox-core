@@ -17,7 +17,7 @@ import (
 
 type AuthService interface {
 	Register(username, password string) error
-	Login(username, password string) (string, error)
+	Login(username, password string) (string, *models.User, error)
 	GetMe(id string) (*models.User, error)
 	EnsureAdminExists() error
 	RequestPasswordReset(username string) error
@@ -81,17 +81,17 @@ func (s *authServiceImpl) Register(username, password string) error {
 	return s.userRepo.Create(&user)
 }
 
-func (s *authServiceImpl) Login(username, password string) (string, error) {
+func (s *authServiceImpl) Login(username, password string) (string, *models.User, error) {
 	s.EnsureAdminExists()
 	username = strings.TrimSpace(username)
 
 	user, err := s.userRepo.FindByUsername(username)
 	if err != nil {
-		return "", errors.New("invalid credentials")
+		return "", nil, errors.New("invalid credentials")
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
-		return "", errors.New("invalid credentials")
+		return "", nil, errors.New("invalid credentials")
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
@@ -103,10 +103,10 @@ func (s *authServiceImpl) Login(username, password string) (string, error) {
 
 	tokenString, err := token.SignedString([]byte(config.Env.JWTSecret))
 	if err != nil {
-		return "", errors.New("could not generate token")
+		return "", nil, errors.New("could not generate token")
 	}
 
-	return tokenString, nil
+	return tokenString, user, nil
 }
 
 func (s *authServiceImpl) GetMe(id string) (*models.User, error) {
