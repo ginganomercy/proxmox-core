@@ -50,11 +50,7 @@ func (s *proxmoxServiceImpl) GetVncProxy(node, vmType, vmid string) (map[string]
 func (s *proxmoxServiceImpl) GetTermProxy(node, vmType, vmid string) (map[string]interface{}, error) {
 	endpoint := fmt.Sprintf("/nodes/%s/%s/%s/termproxy", node, vmType, vmid)
 
-	payload := map[string]interface{}{
-		"websocket": 1,
-	}
-
-	body, err := s.client.Post(endpoint, payload)
+	body, err := s.client.Post(endpoint, nil)
 	if err != nil {
 		return nil, err
 	}
