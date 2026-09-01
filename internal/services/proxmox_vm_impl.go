@@ -47,6 +47,27 @@ func (s *proxmoxServiceImpl) GetVncProxy(node, vmType, vmid string) (map[string]
 	return data, nil
 }
 
+func (s *proxmoxServiceImpl) GetTermProxy(node, vmType, vmid string) (map[string]interface{}, error) {
+	endpoint := fmt.Sprintf("/nodes/%s/%s/%s/termproxy", node, vmType, vmid)
+
+	payload := map[string]interface{}{
+		"websocket": 1,
+	}
+
+	body, err := s.client.Post(endpoint, payload)
+	if err != nil {
+		return nil, err
+	}
+
+	var response map[string]interface{}
+	if err := json.Unmarshal(body, &response); err != nil {
+		return nil, err
+	}
+
+	data, _ := response["data"].(map[string]interface{})
+	return data, nil
+}
+
 func (s *proxmoxServiceImpl) VMPowerAction(node, vmType, vmid, action string) error {
 	endpoint := fmt.Sprintf("/nodes/%s/%s/%s/status/%s", node, vmType, vmid, action)
 	_, err := s.client.Post(endpoint, nil)

@@ -68,6 +68,29 @@ func (ctrl *ProxmoxController) GetVncProxy(c *fiber.Ctx) error {
 	return c.JSON(data)
 }
 
+func (ctrl *ProxmoxController) GetTermProxy(c *fiber.Ctx) error {
+	node := c.Params("node")
+	vmid := c.Params("vmid")
+	type_ := c.Params("type") // qemu or lxc
+
+	if !utils.IsValidNode(node) || !utils.IsValidVMID(vmid) || !utils.IsValidVMType(type_) {
+		return c.Status(400).JSON(fiber.Map{"error": "invalid parameter format (potential path traversal detected)"})
+	}
+
+	userId := c.Locals("userId").(string)
+	role, _ := c.Locals("role").(string)
+	if !ctrl.CheckOwnership(userId, role, vmid) {
+		return c.Status(403).JSON(fiber.Map{"error": "Forbidden: You do not own this instance"})
+	}
+
+	data, err := ctrl.proxmoxService.GetTermProxy(node, type_, vmid)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	return c.JSON(data)
+}
+
 type VMConfigRequest struct {
 	Memory     *int    `json:"memory,omitempty"`
 	Cores      *int    `json:"cores,omitempty"`

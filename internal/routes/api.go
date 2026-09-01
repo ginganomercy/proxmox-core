@@ -64,6 +64,7 @@ func RegisterRoutes(
 	proxmox.Post("/nodes/:node/qemu/:vmid/power", proxmoxCtrl.VMPowerAction)
 	proxmox.Post("/nodes/:node/qemu/:vmid/config", proxmoxCtrl.UpdateVMConfig)
 	proxmox.Post("/nodes/:node/:type/:vmid/vncproxy", proxmoxCtrl.GetVncProxy)
+	proxmox.Post("/nodes/:node/:type/:vmid/termproxy", proxmoxCtrl.GetTermProxy)
 	proxmox.Delete("/nodes/:node/:type/:vmid", proxmoxCtrl.DeleteInstance)
 
 	// Advanced Operations (Sprint 3)

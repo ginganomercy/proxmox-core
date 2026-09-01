@@ -16,6 +16,7 @@ type ProxmoxService interface {
 	GetInstanceRrdData(node, vmType, vmid, timeframe string) ([]interface{}, error)
 	GetNodeRrdData(node, timeframe string) ([]interface{}, error)
 	GetVncProxy(node, vmType, vmid string) (map[string]interface{}, error)
+	GetTermProxy(node, vmType, vmid string) (map[string]interface{}, error)
 	VMPowerAction(node, vmType, vmid, action string) error
 	UpdateVMConfig(node, vmType, vmid string, configPayload interface{}) error
 	GetSnapshots(node, vmType, vmid string) ([]interface{}, error)
