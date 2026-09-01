@@ -34,10 +34,13 @@ func NewClient() (ProxmoxClient, error) {
 		return nil, errors.New("proxmox credentials not fully configured in .env")
 	}
 
-	// Ignore self-signed certificates
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	// Clone DefaultTransport to inherit Connection Pooling and HTTP/2 settings,
+	// then override the TLS config to ignore self-signed certificates.
+	tr := http.DefaultTransport.(*http.Transport).Clone()
+	if tr.TLSClientConfig == nil {
+		tr.TLSClientConfig = &tls.Config{}
 	}
+	tr.TLSClientConfig.InsecureSkipVerify = true
 
 	httpClient := &http.Client{
 		Transport: tr,
