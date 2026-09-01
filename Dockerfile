@@ -1,9 +1,7 @@
 # Build Stage
-FROM golang:alpine AS build
+FROM golang:1.23-bookworm AS build
 
-# Install gcc and musl-dev because go-sqlite3 requires CGO
-RUN apk add --no-cache gcc musl-dev
-
+# base debian bookworm image includes build-essential and gcc which is perfect for CGO
 WORKDIR /app
 
 # Install dependencies
@@ -15,10 +13,12 @@ COPY . .
 RUN CGO_ENABLED=1 GOOS=linux go build -o core-api ./cmd/api
 
 # Production Stage
-FROM alpine:latest
+FROM debian:bookworm-slim
 
 # Install tzdata for timezones and ca-certificates for HTTPS
-RUN apk add --no-cache tzdata ca-certificates
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ca-certificates tzdata && \
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
