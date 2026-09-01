@@ -1,5 +1,4 @@
-# Build Stage
-FROM golang:1.23-bookworm AS build
+FROM golang:bookworm AS build
 
 # base debian bookworm image includes build-essential and gcc which is perfect for CGO
 WORKDIR /app
